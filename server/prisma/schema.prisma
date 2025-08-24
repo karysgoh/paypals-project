@@ -1,0 +1,345 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======================================
+// ENUMS
+// ======================================
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum CircleMemberRole {
+  admin
+  member
+}
+
+enum CircleMemberStatus {
+  active
+  pending
+  removed
+}
+
+enum CircleTypeEnum {
+  friends
+  family
+  roommates
+  travel
+  project
+  colleagues
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  pending
+  failed
+}
+
+enum PaymentMethod {
+  venmo
+  paypal
+  cash
+  bank_transfer
+  zelle
+  other
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  rejected
+  expired
+}
+
+enum NotificationType {
+  transaction_created
+  payment_due
+  payment_received
+  circle_invitation
+  member_joined
+  general
+}
+
+enum NotificationChannel {
+  email
+  push
+  in_app
+}
+
+enum DeliveryStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+}
+
+// ======================================
+// SYSTEM ADMINISTRATION MODELS
+// ======================================
+
+model Role {
+  id          Int        @id @default(autoincrement())
+  role_name   String     @unique
+  description String?
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              Int        @id @default(autoincrement())
+  permission_name String     @unique
+  description     String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+// ======================================
+// CORE USER MODEL
+// ======================================
+
+model User {
+  id             Int        @id @default(autoincrement())
+  username       String     @unique
+  password       String     @db.VarChar(255)
+  phone_number   String?
+  email          String     @unique
+  email_verified Boolean    @default(false)
+  role_id        Int?
+  status         UserStatus @default(active)
+
+  created_at   DateTime   @default(now())
+  updated_at   DateTime   @updatedAt
+
+  // Relations
+  role                     Role?                      @relation(fields: [role_id], references: [id])
+  circleMembers            CircleMember[]
+  createdTransactions      Transaction[]              @relation("TransactionCreator")
+  transactionParticipants  TransactionParticipant[]
+  sentInvitations          Invitation[]               @relation("InvitationSender")
+  receivedInvitations      Invitation[]               @relation("InvitationReceiver")
+  notifications            Notification[]
+  auditLogs                AuditLog[]
+  emailVerificationTokens  EmailVerificationToken[]
+
+  @@map("users")
+  @@index([username])
+  @@index([email])
+}
+
+// ======================================
+// CIRCLE MANAGEMENT
+// ======================================
+
+model Circle {
+  id         Int            @id @default(autoincrement())
+  name       String
+  type       CircleTypeEnum @default(friends)
+
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  // Relations
+  members      CircleMember[]
+  transactions Transaction[]
+  invitations  Invitation[]
+  notifications Notification[]
+
+  @@map("circles")
+  @@index([name])
+  @@index([type])
+}
+
+model CircleMember {
+  circle_id Int
+  user_id   Int
+  role      CircleMemberRole   @default(member)
+  status    CircleMemberStatus @default(active)
+  joined_at DateTime           @default(now())
+
+  circle Circle @relation(fields: [circle_id], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([circle_id, user_id])
+  @@map("circle_members")
+  @@index([user_id])
+  @@index([circle_id])
+}
+
+// ======================================
+// TRANSACTION MANAGEMENT
+// ======================================
+
+model TransactionCategory {
+  id            Int    @id @default(autoincrement())
+  category_name String @unique
+
+  transactions Transaction[]
+
+  @@map("transaction_categories")
+}
+
+model Transaction {
+  id             Int               @id @default(autoincrement())
+  category_id    Int?
+  circle_id      Int
+  name           String
+  description    String?
+  location       String?
+  total_amount   Decimal           @db.Decimal(14, 2)
+  status         TransactionStatus @default(pending)
+  created_by     Int
+  expense_date   DateTime          @default(now())
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+
+  // Relations
+  category     TransactionCategory? @relation(fields: [category_id], references: [id])
+  circle       Circle               @relation(fields: [circle_id], references: [id], onDelete: Cascade)
+  creator      User                 @relation("TransactionCreator", fields: [created_by], references: [id])
+  participants TransactionParticipant[]
+  notifications Notification[]
+
+  @@map("transactions")
+  @@index([circle_id])
+  @@index([created_by])
+  @@index([status])
+  @@index([expense_date])
+  @@index([created_at])
+}
+
+model TransactionParticipant {
+  transaction_id      Int
+  user_id             Int
+  amount_owed         Decimal       @db.Decimal(14, 2)
+  payment_status      PaymentStatus @default(unpaid)
+  payment_method      PaymentMethod?
+  external_payment_id String?
+  paid_at             DateTime?
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([transaction_id, user_id])
+  @@map("transaction_participants")
+  @@index([user_id])
+  @@index([payment_status])
+}
+  
+// ======================================
+// INVITATION SYSTEM
+// ======================================
+
+model Invitation {
+  id          Int              @id @default(autoincrement())
+  circle_id   Int
+  inviter_id  Int
+  invitee_id  Int
+  email       String?
+  status      InvitationStatus @default(pending)
+  created_at  DateTime         @default(now())
+  expires_at  DateTime
+
+  circle   Circle @relation(fields: [circle_id], references: [id], onDelete: Cascade)
+  inviter  User   @relation("InvitationSender", fields: [inviter_id], references: [id])
+  invitee  User   @relation("InvitationReceiver", fields: [invitee_id], references: [id])
+
+  @@map("invitations")
+  @@index([invitee_id, status])
+  @@index([expires_at])
+}
+
+// ======================================
+// NOTIFICATION SYSTEM
+// ======================================
+
+model Notification {
+  id                     Int                 @id @default(autoincrement())
+  user_id                Int
+  type                   NotificationType
+  title                  String
+  message                String
+  is_read                Boolean             @default(false)
+  delivery_status        DeliveryStatus      @default(pending)
+  notification_channel   NotificationChannel @default(in_app)
+  related_transaction_id Int?
+  related_circle_id      Int?
+  created_at             DateTime            @default(now())
+
+  user                User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  related_transaction Transaction? @relation(fields: [related_transaction_id], references: [id])
+  related_circle      Circle?      @relation(fields: [related_circle_id], references: [id])
+
+  @@map("notifications")
+  @@index([user_id])
+  @@index([user_id, is_read])
+  @@index([created_at])
+  @@index([type])
+  @@index([related_transaction_id])
+  @@index([related_circle_id])
+}
+
+// ======================================
+// SECURITY & AUDIT
+// ======================================
+
+model EmailVerificationToken {
+  id         Int      @id @default(autoincrement())
+  email      String
+  token      String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+  user_id    Int?
+  used       Boolean  @default(false)
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+  @@index([email])
+  @@index([expires_at])
+}
+
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  performed_by  Int?
+  action_type   String
+  target_entity String
+  created_at    DateTime @default(now())
+
+  user User? @relation(fields: [performed_by], references: [id])
+
+  @@map("audit_logs")
+  @@index([performed_by])
+  @@index([created_at])
+}
