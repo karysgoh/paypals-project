@@ -122,6 +122,11 @@ router.post("/logout", (req, res) => {
 
 // [POST] Refresh token route
 router.post("/refresh", jwtMiddleware.refreshTokenHandler);
+
+
+const circleRoutes = require('../routes/circleRoutes.js'); 
+router.use('/circle', circleRoutes); 
+
 //////////////////////////////////////////////////////
 // EXPORT ROUTER
 //////////////////////////////////////////////////////
