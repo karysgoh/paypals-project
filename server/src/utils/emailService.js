@@ -1,4 +1,3 @@
-// utils/emailService.js
 const nodemailer = require('nodemailer');
 const logger = require('../logger');
 
@@ -190,7 +189,42 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
   }
 };
 
+const sendCircleInvitationEmail = async (email, inviterUsername, circleName) => {
+  try {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+      from: {
+        name: 'PayPals Team',
+        address: process.env.SMTP_USER
+      },
+      to: email,
+      subject: `You're invited to join ${circleName} on PayPals` ,
+      html: `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <div style="background-color: #059669; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">You're invited!</h1>
+          </div>
+          <div style="padding: 30px; background-color: #f9fafb;">
+            <p style="color: #374151;">${inviterUsername} invited you to join the circle <strong>${circleName}</strong> on PayPals.</p>
+            <p style="color: #6B7280;">Create an account or log in to accept the invitation.</p>
+          </div>
+        </div>
+      `,
+      text: `${inviterUsername} invited you to join the circle ${circleName} on PayPals. Create an account or log in to accept the invitation.`
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info(`Circle invitation email sent to ${email}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    logger.error(`Failed to send circle invitation email to ${email}: ${error.message}`);
+    throw error;
+  }
+}
+
 module.exports = {
   sendVerificationEmail,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendCircleInvitationEmail
 };

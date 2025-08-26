@@ -7,7 +7,7 @@ const express = require('express');
 // IMPORT CONTROLLERS
 //////////////////////////////////////////////////////
 const jwtMiddleware = require('../middlewares/jwtMiddleware.js');
-const circleController = require('../controllers/circleController.js');
+const invitationController = require('../controllers/invitationController.js');
 
 //////////////////////////////////////////////////////
 // IMPORT MIDDLEWARES FOR INPUT VALIDATION
@@ -18,45 +18,39 @@ const { sanitizeRequest, sanitizeResponse } = require('../middlewares/sanitizers
 // CREATE ROUTER
 //////////////////////////////////////////////////////
 const router = express.Router();
-router.use(sanitizeRequest); 
+router.use(sanitizeRequest);
 
 //////////////////////////////////////////////////////
 // DEFINE ROUTES
 //////////////////////////////////////////////////////
 router.post(
-    '/', 
-    jwtMiddleware.verifyAccessToken, 
-    circleController.createCircle
-); 
-
-router.get(
-    '/user',
+    '/:circleId/',
     jwtMiddleware.verifyAccessToken,
-    circleController.getUserCircles
-); 
-
-router.get(
-    '/:circleId', 
-    jwtMiddleware.verifyAccessToken, 
-    circleController.getCircleById
-); 
-
-router.put(
-    '/:circleId', 
-    jwtMiddleware.verifyAccessToken, 
-    circleController.updateCircle
-); 
-
-router.delete(
-    '/:circleId',
-    jwtMiddleware.verifyAccessToken, 
-    circleController.deleteCircle
+    invitationController.send
 );
 
 router.post(
-    '/:circleId/leave',
+    '/:invitationId/accept',
     jwtMiddleware.verifyAccessToken,
-    circleController.leaveCircle
+    invitationController.accept
+);
+
+router.post(
+    '/:invitationId/reject',
+    jwtMiddleware.verifyAccessToken,
+    invitationController.reject
+);
+
+router.get(
+    '/my',
+    jwtMiddleware.verifyAccessToken,
+    invitationController.readMy
+);
+
+router.delete(
+    '/:invitationId',
+    jwtMiddleware.verifyAccessToken,
+    invitationController.delete
 );
 
 //////////////////////////////////////////////////////

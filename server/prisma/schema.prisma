@@ -266,7 +266,7 @@ model Invitation {
   id          Int              @id @default(autoincrement())
   circle_id   Int
   inviter_id  Int
-  invitee_id  Int
+  invitee_id  Int?
   email       String?
   status      InvitationStatus @default(pending)
   created_at  DateTime         @default(now())
@@ -274,7 +274,7 @@ model Invitation {
 
   circle   Circle @relation(fields: [circle_id], references: [id], onDelete: Cascade)
   inviter  User   @relation("InvitationSender", fields: [inviter_id], references: [id])
-  invitee  User   @relation("InvitationReceiver", fields: [invitee_id], references: [id])
+  invitee  User?   @relation("InvitationReceiver", fields: [invitee_id], references: [id])
 
   @@map("invitations")
   @@index([invitee_id, status])

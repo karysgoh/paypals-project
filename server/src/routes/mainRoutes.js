@@ -127,6 +127,9 @@ router.post("/refresh", jwtMiddleware.refreshTokenHandler);
 const circleRoutes = require('../routes/circleRoutes.js'); 
 router.use('/circle', circleRoutes); 
 
+const invitationRoutes = require('../routes/invitationRoutes.js');
+router.use('/invitations', invitationRoutes);
+
 //////////////////////////////////////////////////////
 // EXPORT ROUTER
 //////////////////////////////////////////////////////

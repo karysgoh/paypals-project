@@ -1,12 +1,15 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { sendCircleInvitationEmail } = require('../utils/emailService');
 
 module.exports = {
     createNewCircle: async (data) => {
         try {
-            // Validate type if provided
-            const allowedTypes = Prisma.CircleTypeEnum ? Object.values(Prisma.CircleTypeEnum) : [];
-            if (data.type && !allowedTypes.includes(data.type)) {
+            // Normalize and validate type if provided
+            const normalizedType = typeof data.type === 'string' ? data.type.toLowerCase() : 'friends';
+            const enumObj = Prisma && Prisma.CircleTypeEnum ? Prisma.CircleTypeEnum : null;
+            const allowedTypes = enumObj ? Object.values(enumObj) : null;
+            if (allowedTypes && !allowedTypes.includes(normalizedType)) {
                 throw new Error('Invalid circle type');
             }
 
@@ -14,9 +17,7 @@ module.exports = {
                 const newCircle = await tx.circle.create({
                     data: {
                         name: data.name,
-                        type: data.type || 'friends',
-                        created_at: new Date(),
-                        updated_at: new Date(),
+                        type: normalizedType,
                     }
                 });
 
@@ -26,7 +27,6 @@ module.exports = {
                         circle_id: newCircle.id,
                         user_id: data.created_by,
                         role: 'admin',
-                        joined_at: new Date(),
                         status: 'active'
                     }
                 });
@@ -37,7 +37,7 @@ module.exports = {
                         action_type: 'create',
                         target_entity: 'circle', 
                     }
-                })
+                });
 
                 return {
                     circle: newCircle,
@@ -48,8 +48,13 @@ module.exports = {
             return result;
         } catch (error) {
             if (error instanceof Prisma.PrismaClientValidationError) {
-                // Likely invalid enum value
                 throw new Error('Invalid circle type');
+            }
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2009') {
+                throw new Error('Invalid circle type');
+            }
+            if (typeof error?.message === 'string' && error.message.toLowerCase().includes('invalid circle type')) {
+                throw error;
             }
             console.error('Error creating circle:', error);
             throw new Error('Failed to create circle');
@@ -132,7 +137,7 @@ module.exports = {
         }
     }, 
 
-    updateCircle: async (circleId, data) => {
+    updateCircle: async (circleId, data, userId) => {
         try {
             const result = await prisma.$transaction(async (tx) => {
                 // 1) Check circle existence first
@@ -141,17 +146,11 @@ module.exports = {
                     throw new Error('Circle not found');
                 }
 
-                // Validate type if provided
-                const allowedTypes = Prisma.CircleTypeEnum ? Object.values(Prisma.CircleTypeEnum) : [];
-                if (data.type && !allowedTypes.includes(data.type)) {
-                    throw new Error('Invalid circle type');
-                }
-
                 // 2) Verify membership
                 const membership = await tx.circleMember.findFirst({
                     where: {
                         circle_id: circleId,
-                        user_id: data.userId,
+                        user_id: userId,
                         status: 'active'
                     }
                 });
@@ -164,7 +163,7 @@ module.exports = {
                 const isAdmin = await tx.circleMember.findFirst({
                     where: {
                         circle_id: circleId,
-                        user_id: data.userId,
+                        user_id: userId,
                         role: 'admin'
                     }
                 });
@@ -173,13 +172,21 @@ module.exports = {
                     throw new Error('Access denied: Not an admin member of this circle');
                 }
 
-                // 4) Update
-                const updateData = {
-                    updated_at: new Date()
-                };
+                // 4) Validate type if provided
+                let normalizedType;
+                if (typeof data.type === 'string') {
+                    normalizedType = data.type.toLowerCase();
+                    const enumObj = Prisma && Prisma.CircleTypeEnum ? Prisma.CircleTypeEnum : null;
+                    const allowedTypes = enumObj ? Object.values(enumObj) : null;
+                    if (allowedTypes && !allowedTypes.includes(normalizedType)) {
+                        throw new Error('Invalid circle type');
+                    }
+                }
+
+                // 5) Update
+                const updateData = {};
                 if (typeof data.name !== 'undefined') updateData.name = data.name;
-                if (typeof data.description !== 'undefined') updateData.description = data.description;
-                if (typeof data.type !== 'undefined') updateData.type = data.type;
+                if (typeof normalizedType !== 'undefined') updateData.type = normalizedType;
 
                 const updatedCircle = await tx.circle.update({
                     where: { id: circleId },
@@ -188,11 +195,11 @@ module.exports = {
 
                 await tx.auditLog.create({
                     data: {
-                        performed_by: data.userId,
+                        performed_by: userId,
                         action_type: 'update',
                         target_entity: 'circle', 
                     }
-                })
+                });
 
                 return updatedCircle; 
             });
@@ -200,11 +207,16 @@ module.exports = {
             return result;
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-                // Record to update not found
                 throw new Error('Circle not found');
             }
             if (error instanceof Prisma.PrismaClientValidationError) {
                 throw new Error('Invalid circle type');
+            }
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2009') {
+                throw new Error('Invalid circle type');
+            }
+            if (typeof error?.message === 'string' && error.message.toLowerCase().includes('invalid circle type')) {
+                throw error;
             }
             console.error('Error updating circle:', error);
             throw error;
@@ -246,20 +258,35 @@ module.exports = {
                     throw new Error('Access denied: Not an admin member of this circle');
                 }
 
-                // 4) Delete
-                const deletedCircle = await tx.circle.delete({
-                    where: { 
-                        id: circleId
+                // 4) Check for outstanding balances before deletion
+                const pendingTransactions = await tx.transactionParticipant.count({
+                    where: {
+                        transaction: {
+                            circle_id: circleId
+                        },
+                        payment_status: 'unpaid'
                     }
-                })
+                });
 
+                if (pendingTransactions > 0) {
+                    throw new Error('Cannot delete circle with outstanding balances. Please settle all transactions first.');
+                }
+
+                // 5) Create audit log before deletion
                 await tx.auditLog.create({
                     data: {
                         performed_by: userId,
                         action_type: 'delete',
                         target_entity: 'circle', 
                     }
-                })
+                });
+
+                // 6) Delete circle (cascade will handle related records)
+                const deletedCircle = await tx.circle.delete({
+                    where: { 
+                        id: circleId
+                    }
+                });
 
                 return deletedCircle; 
             });
@@ -273,5 +300,87 @@ module.exports = {
             console.error('Error deleting circle:', error); 
             throw error; 
         }
-    }
+    },
+
+    leaveCircle: async (circleId, userId) => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // 1) Check if circle exists
+                const circle = await tx.circle.findUnique({ where: { id: circleId } });
+                if (!circle) {
+                    throw new Error('Circle not found');
+                }
+
+                // 2) Check if user is a member
+                const membership = await tx.circleMember.findFirst({
+                    where: {
+                        circle_id: circleId,
+                        user_id: userId,
+                        status: 'active'
+                    }
+                });
+
+                if (!membership) {
+                    throw error; 
+                }
+
+                // 3) Check if user has outstanding balances
+                const unpaidTransactions = await tx.transactionParticipant.count({
+                    where: {
+                        user_id: userId,
+                        transaction: {
+                            circle_id: circleId
+                        },
+                        payment_status: 'unpaid'
+                    }
+                });
+
+                if (unpaidTransactions > 0) {
+                    throw new Error('Cannot leave circle with outstanding balances. Please settle all transactions first.');
+                }
+
+                // 4) If user is admin, check if there are other admins
+                if (membership.role === 'admin') {
+                    const adminCount = await tx.circleMember.count({
+                        where: {
+                            circle_id: circleId,
+                            role: 'admin',
+                            status: 'active'
+                        }
+                    });
+
+                    if (adminCount === 1) {
+                        throw new Error('Cannot leave circle as the only admin. Please promote another member to admin first.');
+                    }
+                }
+
+                // 5) Update member status to removed
+                await tx.circleMember.update({
+                    where: {
+                        circle_id_user_id: {
+                            circle_id: circleId,
+                            user_id: userId
+                        }
+                    },
+                    data: { status: 'removed' }
+                });
+
+                // 6) Create audit log
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId,
+                        action_type: 'leave',
+                        target_entity: 'circle',
+                    }
+                });
+
+                return { success: true };
+            });
+
+            return result;
+        } catch (error) {
+            console.error('Error leaving circle:', error);
+            throw error;
+        }
+    }, 
 };

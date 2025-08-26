@@ -7,6 +7,7 @@ const mapCircleError = (error) => {
 	const message = (error && error.message) ? error.message : String(error);
 	if (message.includes('Access denied')) return { status: 403, message };
 	if (message.toLowerCase().includes('invalid circle type')) return { status: 400, message: 'Invalid circle type' };
+	if (message.toLowerCase().includes('cannot delete circle with outstanding balances')) return { status: 400, message };
 	if (message.toLowerCase().includes('circle not found')) return { status: 404, message: 'Circle not found' };
 	if (message.toLowerCase().includes('not found')) return { status: 404, message };
 	return { status: 500, message: 'Internal server error' };
@@ -104,12 +105,11 @@ module.exports = {
 
 		const data = {
 			name: name, 
-			type: type, 
-			userId: userId
+			type: type
 		}; 
 
 		try{
-			const result = await circleModel.updateCircle(circleIdNum, data); 
+			const result = await circleModel.updateCircle(circleIdNum, data, userId); 
 
 			if(!result){
 				logger.warn("Circle not found"); 
@@ -153,6 +153,30 @@ module.exports = {
 			});
 		} catch(error){
 			logger.error(`Error deleting circle: ${error}`);
+			const mapped = mapCircleError(error);
+			return next(new AppError(mapped.message, mapped.status));
+		}
+	}),
+
+	leaveCircle: catchAsync(async (req, res, next) => {
+		const { circleId } = req.params;
+		const userId = res.locals.user_id;
+		const circleIdNum = parseInt(circleId, 10);
+
+		if (Number.isNaN(circleIdNum)) {
+			return next(new AppError('Invalid circle ID', 400));
+		}
+
+		try {
+			const result = await circleModel.leaveCircle(circleIdNum, userId);
+			logger.info(`User ${userId} left circle ${circleIdNum}`);
+			res.status(200).json({
+				status: 'success',
+				message: 'Left circle successfully',
+				data: result
+			});
+		} catch (error) {
+			logger.error(`Error leaving circle: ${error}`);
 			const mapped = mapCircleError(error);
 			return next(new AppError(mapped.message, mapped.status));
 		}
