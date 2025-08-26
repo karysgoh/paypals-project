@@ -383,4 +383,194 @@ module.exports = {
             throw error;
         }
     }, 
+
+    removeMemberFromCircle: async (circleId, memberId, userId) => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // 1) Check if circle exists
+                const circle = await tx.circle.findUnique({ where: { id: circleId } });
+                if (!circle) {
+                    throw new Error('Circle not found');
+                }
+
+                // 2) Check if requester is a member
+                const requesterMembership = await tx.circleMember.findFirst({
+                    where: {
+                        circle_id: circleId,
+                        user_id: userId,
+                        status: 'active'
+                    }
+                });
+
+                if (!requesterMembership) {
+                    throw new Error('Access denied: Not a member of this circle');
+                }
+
+                // 3) Check if requester is an admin
+                if (requesterMembership.role !== 'admin') {
+                    throw new Error('Access denied: Not an admin member of this circle');
+                }
+
+                // 4) Check if target member exists and is active
+                const targetMembership = await tx.circleMember.findFirst({
+                    where: {
+                        circle_id: circleId,
+                        user_id: memberId,
+                        status: 'active'
+                    }
+                });
+
+                if (!targetMembership) {
+                    throw new Error('Member not found in this circle');
+                }
+
+                // 5) Check if target member has outstanding balances
+                const unpaidTransactions = await tx.transactionParticipant.count({
+                    where: {
+                        user_id: memberId,
+                        transaction: {
+                            circle_id: circleId
+                        },
+                        payment_status: 'unpaid'
+                    }
+                });
+
+                if (unpaidTransactions > 0) {
+                    throw new Error('Cannot remove member with outstanding balances. Please settle all transactions first.');
+                }
+
+                // 6) If target is admin, check if there are other admins
+                if (targetMembership.role === 'admin') {
+                    const adminCount = await tx.circleMember.count({
+                        where: {
+                            circle_id: circleId,
+                            role: 'admin',
+                            status: 'active'
+                        }
+                    });
+
+                    if (adminCount === 1) {
+                        throw new Error('Cannot remove the only admin member. Please promote another member to admin first.');
+                    }
+                }
+
+                // 7) Update target member status to removed
+                await tx.circleMember.update({
+                    where: {
+                        circle_id_user_id: {
+                            circle_id: circleId,
+                            user_id: memberId
+                        }
+                    },
+                    data: { status: 'removed' }
+                });
+
+               // 8) Create audit log
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId,
+                        action_type: 'remove_member',
+                        target_entity: 'circle',
+                    }
+                });
+                return { success: true };
+            });
+            return result;
+        } catch (error) {
+            console.error('Error removing member from circle:', error);
+            throw error;
+        }  
+    }, 
+
+    updateMemberRole: async (circleId, memberId, newRole, userId) => {
+        try {
+            // Ensure newRole is part of the CircleMemberRole enum
+            if (
+                !Prisma ||
+                !Prisma.CircleMemberRole ||
+                !Object.values(Prisma.CircleMemberRole).includes(newRole)
+            ) {
+                throw new Error('Invalid circle member role');
+            }
+
+            const result = await prisma.$transaction(async (tx) => {
+                // 1) Check if circle exists
+                const circle = await tx.circle.findUnique({ where: { id: circleId } });
+                if (!circle) {
+                    throw new Error('Circle not found');
+                }
+
+                // 2) Check if requester is a member
+                const requesterMembership = await tx.circleMember.findFirst({
+                    where: {
+                        circle_id: circleId,
+                        user_id: userId,
+                        status: 'active'
+                    }
+                });
+
+                if (!requesterMembership) {
+                    throw new Error('Access denied: Not a member of this circle');
+                }
+
+                // 3) Check if requester is an admin
+                if (requesterMembership.role !== 'admin') {
+                    throw new Error('Access denied: Not an admin member of this circle');
+                }
+
+                // 4) Check if target member exists and is active
+                const targetMembership = await tx.circleMember.findFirst({
+                    where: {
+                        circle_id: circleId,
+                        user_id: memberId,
+                        status: 'active'
+                    }
+                });
+
+                if (!targetMembership) {
+                    throw new Error('Member not found in this circle');
+                }
+
+                // 5) If demoting self from admin, ensure at least one other admin exists
+                if (memberId === userId && targetMembership.role === 'admin' && newRole !== 'admin') {
+                    const adminCount = await tx.circleMember.count({
+                        where: {
+                            circle_id: circleId,
+                            role: 'admin',
+                            status: 'active'
+                        }
+                    });
+
+                    if (adminCount === 1) {
+                        throw new Error('Cannot demote yourself as the only admin. Please promote another member to admin first.');
+                    }
+                }
+
+                // 6) Update member role
+                await tx.circleMember.update({
+                    where: {
+                        circle_id_user_id: {
+                            circle_id: circleId,
+                            user_id: memberId
+                        }
+                    },
+                    data: { role: newRole }
+                });
+
+                // 7) Create audit log
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId,
+                        action_type: 'update_member_role',
+                        target_entity: 'circle',
+                    }
+                });
+                return { success: true };
+            });
+            return result;
+        } catch (error) {
+            console.error('Error updating member role:', error);
+            throw error;
+        }
+    }
 };

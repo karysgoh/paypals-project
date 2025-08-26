@@ -14,6 +14,7 @@ const mapInvitationError = (error) => {
 	if (message.toLowerCase().includes('no longer valid')) return { status: 400, message };
 	if (message.toLowerCase().includes('expired')) return { status: 400, message };
 	if (message.toLowerCase().includes('only pending invitations can be deleted')) return { status: 400, message };
+	if (message.toLowerCase().includes('invite yourself to a circle')) return { status: 400, message };
 	return { status: 500, message: 'Internal server error' };
 };
 
@@ -24,13 +25,7 @@ module.exports = {
 		const inviterId = res.locals.user_id;
 		const inviterUsername = res.locals.username;
 
-		if (!inviteeId && !email) {
-			return next(new AppError('inviteeId or email is required', 400));
-		}
-
 		const circleIdNum = parseInt(circleId, 10);
-		const inviteeIdNum = parseInt(inviteeId, 10);
-		
 		if (Number.isNaN(circleIdNum)) {
 			return next(new AppError('Invalid circle ID', 400));
 		}
@@ -39,7 +34,7 @@ module.exports = {
 			const invitation = await invitationModel.sendInvitation(circleIdNum, {
 				inviterId,
 				inviterUsername,
-				inviteeIdNum,
+				inviteeId: inviteeId ? Number(inviteeId) : null,
 				email
 			});
 			logger.info(`Invitation created for circle ${circleIdNum}`);

@@ -59,6 +59,18 @@ router.post(
     circleController.leaveCircle
 );
 
+router.post(
+    '/:circleId/members/:memberId/remove',
+    jwtMiddleware.verifyAccessToken,
+    circleController.removeMemberFromCircle
+);
+
+router.put(
+    '/:circleId/members/:memberId/role',
+    jwtMiddleware.verifyAccessToken,
+    circleController.updateMemberRole
+);
+
 //////////////////////////////////////////////////////
 // EXPORT ROUTER
 //////////////////////////////////////////////////////
