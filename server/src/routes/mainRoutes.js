@@ -76,22 +76,6 @@ router.get('/verify-email/:token', userController.verifyEmail);
 router.post('/resend-verification', userController.resendVerificationEmail);
 
 // Debug route to check if tokens exist
-router.get('/debug/tokens/:email', async (req, res) => {
-  try {
-    const { email } = req.params;
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
-    
-    const tokens = await prisma.emailVerificationToken.findMany({
-      where: { email: email },
-      include: { user: true }
-    });
-    
-    res.json({ tokens });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 router.get('/me', jwtMiddleware.verifyAccessToken, (req, res) => {
   const user = {
@@ -103,7 +87,6 @@ router.get('/me', jwtMiddleware.verifyAccessToken, (req, res) => {
   res.status(200).json(user);
 });
 
-// [POST] Logout route to clear the cookie
 router.post("/logout", (req, res) => {
   res.clearCookie("authToken", {
     httpOnly: true,
@@ -119,10 +102,6 @@ router.post("/logout", (req, res) => {
 
   res.status(200).json({ message: "Logged out successfully" });
 });
-
-// [POST] Refresh token route
-router.post("/refresh", jwtMiddleware.refreshTokenHandler);
-
 
 const circleRoutes = require('../routes/circleRoutes.js'); 
 router.use('/circle', circleRoutes); 

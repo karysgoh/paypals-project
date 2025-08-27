@@ -1,8 +1,35 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 2.5rem;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  #root {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    width: 100vw;
+    min-width: 0;
+  }
+  .card {
+    padding: 1em;
+  }
+  h1, h2, h3 {
+    font-size: 1.25rem !important;
+  }
+  .logo {
+    height: 3em;
+    padding: 0.75em;
+  }
+  .read-the-docs {
+    font-size: 0.9em;
+  }
+}
+/* Remove unwanted padding and centering for main app container */
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: initial;
 }
 
 .logo {
