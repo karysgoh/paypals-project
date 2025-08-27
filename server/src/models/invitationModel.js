@@ -98,7 +98,9 @@ module.exports = {
                     data: {
                         performed_by: data.inviterId,
                         action_type: 'invite',
-                        target_entity: 'circle'
+                        target_entity: 'circle',
+                        target_id: circleId,
+                        description: `Invitation sent to ${data.inviteeId ? 'user' : 'email'}`
                     }
                 });
 
@@ -170,6 +172,8 @@ module.exports = {
                         performed_by: userId,
                         action_type: 'join',
                         target_entity: 'circle',
+                        target_id: invitation.circle_id,
+                        description: 'User joined circle via invitation'
                     }
                 });
 
@@ -218,6 +222,8 @@ module.exports = {
                         performed_by: userId,
                         action_type: 'reject_invitation',
                         target_entity: 'circle',
+                        target_id: invitation.circle_id,
+                        description: 'User rejected circle invitation'
                     }
                 });
 
@@ -309,6 +315,8 @@ module.exports = {
                         performed_by: userId,
                         action_type: 'delete_invitation',
                         target_entity: 'circle',
+                        target_id: invitation.circle_id,
+                        description: 'Invitation deleted by inviter'
                     }
                 });
 

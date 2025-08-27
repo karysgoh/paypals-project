@@ -35,7 +35,9 @@ module.exports = {
                     data: {
                         performed_by: data.created_by,
                         action_type: 'create',
-                        target_entity: 'circle', 
+                        target_entity: 'circle',
+                        target_id: newCircle.id,
+                        description: `Circle "${newCircle.name}" created`
                     }
                 });
 
@@ -197,7 +199,9 @@ module.exports = {
                     data: {
                         performed_by: userId,
                         action_type: 'update',
-                        target_entity: 'circle', 
+                        target_entity: 'circle',
+                        target_id: circleId,
+                        description: `Circle "${updatedCircle.name}" updated`
                     }
                 });
 
@@ -277,7 +281,9 @@ module.exports = {
                     data: {
                         performed_by: userId,
                         action_type: 'delete',
-                        target_entity: 'circle', 
+                        target_entity: 'circle',
+                        target_id: circleId,
+                        description: `Circle "${existing.name}" deleted`
                     }
                 });
 
@@ -371,6 +377,8 @@ module.exports = {
                         performed_by: userId,
                         action_type: 'leave',
                         target_entity: 'circle',
+                        target_id: circleId,
+                        description: `User left circle "${circle.name}"`
                     }
                 });
 

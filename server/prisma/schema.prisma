@@ -90,6 +90,20 @@ enum DeliveryStatus {
   failed
 }
 
+enum TransactionCategoryEnum {
+  food
+  travel
+  entertainment
+  shopping
+  transportation
+  utilities
+  rent
+  groceries
+  healthcare
+  education
+  other
+}
+
 // ======================================
 // SYSTEM ADMINISTRATION MODELS
 // ======================================
@@ -147,7 +161,7 @@ model User {
   role                     Role?                      @relation(fields: [role_id], references: [id])
   circleMembers            CircleMember[]
   createdTransactions      Transaction[]              @relation("TransactionCreator")
-  transactionParticipants  TransactionParticipant[]
+  transactionMembers  TransactionMember[]
   sentInvitations          Invitation[]               @relation("InvitationSender")
   receivedInvitations      Invitation[]               @relation("InvitationReceiver")
   notifications            Notification[]
@@ -201,23 +215,20 @@ model CircleMember {
 // ======================================
 // TRANSACTION MANAGEMENT
 // ======================================
-
-model TransactionCategory {
-  id            Int    @id @default(autoincrement())
-  category_name String @unique
-
-  transactions Transaction[]
-
-  @@map("transaction_categories")
-}
-
 model Transaction {
   id             Int               @id @default(autoincrement())
-  category_id    Int?
+  category       TransactionCategoryEnum @default(other) 
   circle_id      Int
   name           String
   description    String?
-  location       String?
+  
+  // Location fields
+  location_name  String?          // "Starbucks Downtown"
+  location_lat   Decimal?         @db.Decimal(10, 8)
+  location_lng   Decimal?         @db.Decimal(11, 8)
+  place_id       String?          // Google Places ID for reference
+  formatted_address String?       // Full formatted address
+
   total_amount   Decimal           @db.Decimal(14, 2)
   status         TransactionStatus @default(pending)
   created_by     Int
@@ -225,11 +236,9 @@ model Transaction {
   created_at     DateTime          @default(now())
   updated_at     DateTime          @updatedAt
 
-  // Relations
-  category     TransactionCategory? @relation(fields: [category_id], references: [id])
   circle       Circle               @relation(fields: [circle_id], references: [id], onDelete: Cascade)
   creator      User                 @relation("TransactionCreator", fields: [created_by], references: [id])
-  participants TransactionParticipant[]
+  members TransactionMember[]
   notifications Notification[]
 
   @@map("transactions")
@@ -240,7 +249,7 @@ model Transaction {
   @@index([created_at])
 }
 
-model TransactionParticipant {
+model TransactionMember {
   transaction_id      Int
   user_id             Int
   amount_owed         Decimal       @db.Decimal(14, 2)
@@ -253,7 +262,7 @@ model TransactionParticipant {
   user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([transaction_id, user_id])
-  @@map("transaction_participants")
+  @@map("transaction_members")
   @@index([user_id])
   @@index([payment_status])
 }
@@ -332,15 +341,19 @@ model EmailVerificationToken {
 }
 
 model AuditLog {
-  id            Int      @id @default(autoincrement())
-  performed_by  Int?
-  action_type   String
-  target_entity String
-  created_at    DateTime @default(now())
+  id             Int       @id @default(autoincrement())
+  performed_by   Int?
+  action_type    String
+  target_entity  String
+  target_id      Int?
+  description    String?
+  created_at     DateTime  @default(now())
 
   user User? @relation(fields: [performed_by], references: [id])
 
   @@map("audit_logs")
   @@index([performed_by])
   @@index([created_at])
+  @@index([target_entity])
+  @@index([target_id])
 }

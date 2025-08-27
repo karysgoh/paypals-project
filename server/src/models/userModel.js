@@ -31,31 +31,46 @@ module.exports = {
 
     createNewUser: async (data) => {
         try {
-            const newUser = await prisma.user.create({
-                data: {
-                    username: data.username,
-                    password: data.password,    
-                    email: data.email,          
-                    email_verified: false,
-                    role_id: data.role_id || null, 
-                    status: 'active'           
-                },
-                select: {
-                    id: true,           
-                    username: true,
-                    email: true,
-                    email_verified: true,
-                    status: true,       
-                    role: {             
-                        select: {
-                            id: true,         
-                            role_name: true   
+            const result = await prisma.$transaction(async (tx) => {
+                const newUser = await tx.user.create({
+                    data: {
+                        username: data.username,
+                        password: data.password,    
+                        email: data.email,          
+                        email_verified: false,
+                        role_id: data.role_id || 1, 
+                        status: 'active'           
+                    },
+                    select: {
+                        id: true,           
+                        username: true,
+                        email: true,
+                        email_verified: true,
+                        status: true,       
+                        role: {             
+                            select: {
+                                id: true,         
+                                role_name: true   
+                            },
                         },
                     },
-                },
+                });
+
+                // Create audit log for user creation
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: newUser.id, 
+                        action_type: 'create',
+                        target_entity: 'user',
+                        target_id: newUser.id,
+                        description: `User "${newUser.username}" created with email ${newUser.email}`
+                    }
+                });
+                
+                return newUser;
             });
-            
-            return newUser;
+
+            return result;
         } catch (error) {
             throw error;
         }
@@ -156,16 +171,30 @@ module.exports = {
 
     updateUserStatus: async (userId, status) => {
         try {
-            const user = await prisma.user.update({
-                where: { id: parseInt(userId, 10) },
-                data: { status: status },
-                select: {
-                    id: true,
-                    username: true,
-                    status: true
-                }
+            const result = await prisma.$transaction(async (tx) => {
+                const user = await tx.user.update({
+                    where: { id: parseInt(userId, 10) },
+                    data: { status: status },
+                    select: {
+                        id: true,
+                        username: true,
+                        status: true
+                    }
+                });
+
+                // Create audit log for status update
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId, // Assuming the user is updating their own status
+                        action_type: 'update_status',
+                        target_entity: 'user',
+                        target_id: userId,
+                        description: `User "${user.username}" status updated to ${status}`
+                    }
+                });
+
+                return user;
             });
-            return user;
         } catch (error) {
             throw error;
         }
@@ -250,20 +279,34 @@ module.exports = {
 
     updateUserEmailVerification: async (userId, isVerified) => {
         try {
-            const user = await prisma.user.update({
-                where: { id: parseInt(userId, 10) },
-                data: { 
-                    email_verified: isVerified 
-                },
-                select: {
-                    id: true,
-                    username: true,
-                    email: true,
-                    email_verified: true,
-                    status: true
-                }
+            const result = await prisma.$transaction(async (tx) => {
+                const user = await tx.user.update({
+                    where: { id: parseInt(userId, 10) },
+                    data: { 
+                        email_verified: isVerified 
+                    },
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        email_verified: true,
+                        status: true
+                    }
+                });
+
+                // Create audit log for email verification update
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId,
+                        action_type: 'verify_email',
+                        target_entity: 'user',
+                        target_id: userId,
+                        description: `User "${user.username}" email verification ${isVerified ? 'completed' : 'reset'}`
+                    }
+                });
+
+                return user;
             });
-            return user;
         } catch (error) {
             throw error;
         }
