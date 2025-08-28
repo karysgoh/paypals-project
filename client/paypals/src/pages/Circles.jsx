@@ -1,9 +1,48 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { 
   Plus, 
-  Users
+  Users,
+  X,
+  UserPlus,
+  Calendar,
+  Clock,
+  ArrowRight
 } from "lucide-react";
+
+const Button = ({ children, variant = "default", size = "default", className = "", onClick, disabled, ...props }) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
+  
+  const variants = {
+    default: "bg-slate-900 text-white hover:bg-slate-800",
+    primary: "bg-slate-900 text-white hover:bg-slate-800",
+    secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
+    outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+  };
+  
+  const sizes = {
+    default: "h-10 px-6 py-2",
+    sm: "h-8 px-3 text-xs",
+    lg: "h-12 px-8 text-base"
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, className = "", ...props }) => (
+  <div className={`bg-white border border-slate-200 rounded-lg shadow-sm ${className}`} {...props}>
+    {children}
+  </div>
+);
 
 export default function Circles() {
   const [user, setUser] = useState(null);
@@ -52,7 +91,7 @@ export default function Circles() {
     try {
       const circleData = {
         name: newCircleName,
-        type: newCircleType || undefined, // Optional field, will be undefined if not selected
+        type: newCircleType || undefined,
       };
       const res = await fetch('http://localhost:3000/api/circle', {
         method: 'POST',
@@ -102,192 +141,242 @@ export default function Circles() {
     }
   };
 
+  const getCircleTypeIcon = (type) => {
+    switch (type) {
+      case 'friends': return '👥';
+      case 'family': return '👨‍👩‍👧‍👦';
+      case 'roommates': return '🏠';
+      case 'travel': return '✈️';
+      case 'project': return '💼';
+      case 'colleagues': return '🏢';
+      case 'couple': return '💑';
+      default: return '👥';
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded-lg w-64"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-40 bg-gray-200 rounded-xl"></div>
-          ))}
+      <div className="min-h-screen bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="animate-pulse space-y-8">
+            <div className="h-8 bg-slate-200 rounded-lg w-64"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-40 bg-slate-200 rounded-xl"></div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex items-center justify-center px-4 font-sans">
-      <div className="bg-white dark:bg-[#2e2e2e] shadow-md rounded-lg p-4 sm:p-8 max-w-7xl w-full">
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">My Circles</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Manage your friend groups and expenses
-              </p>
-            </div>
-            <div className="flex gap-3 flex-wrap">
-              <button
-                onClick={() => setShowCreateForm(true)}
-                style={{ display: 'flex', alignItems: 'center', background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-                onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-              >
-                <Plus style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-                Create Circle
-              </button>
-            </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-6xl mx-auto px-6 py-16">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
+          <div>
+            <h1 className="text-4xl font-bold text-slate-900 mb-2">My Circles</h1>
+            <p className="text-lg text-slate-600">
+              Manage your friend groups and shared expenses
+            </p>
           </div>
+          <Button 
+            variant="primary" 
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Circle
+          </Button>
+        </div>
 
-          {showCreateForm && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(30,41,59,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-              <div style={{ background: 'white', boxShadow: '0 8px 32px rgba(30,41,59,0.15)', padding: '1rem', borderRadius: '1rem', width: '95vw', maxWidth: '24rem', position: 'relative', border: '1px solid #e5e7eb' }}>
-                <button
-                  onClick={() => {
-                    setShowCreateForm(false);
-                    setNewCircleName("");
-                    setNewCircleType("");
-                  }}
-                  style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.5rem', color: '#6b7280', cursor: 'pointer' }}
-                  aria-label="Close"
+        {/* Create Circle Modal */}
+        {showCreateForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md p-6 relative">
+              <button
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setNewCircleName("");
+                  setNewCircleType("");
+                }}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h2 className="text-2xl font-bold text-slate-900 mb-6">Create New Circle</h2>
+              
+              <div onSubmit={(e) => { e.preventDefault(); handleCreateCircle(); }} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Circle Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter circle name"
+                    value={newCircleName}
+                    onChange={(e) => setNewCircleName(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Type <span className="text-slate-500 font-normal">(optional)</span>
+                  </label>
+                  <select
+                    value={newCircleType}
+                    onChange={(e) => setNewCircleType(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 bg-white"
+                  >
+                    <option value="">Select type</option>
+                    <option value="friends">Friends</option>
+                    <option value="family">Family</option>
+                    <option value="roommates">Roommates</option>
+                    <option value="travel">Travel</option>
+                    <option value="project">Project</option>
+                    <option value="colleagues">Colleagues</option>
+                    <option value="couple">Couple</option>
+                  </select>
+                </div>
+                
+                <div className="flex gap-3 pt-4">
+                <button 
+                  onClick={handleCreateCircle}
+                  disabled={!newCircleName.trim()}
+                  className="flex-1 bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 disabled:pointer-events-none inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors h-10 px-6 py-2"
                 >
-                  &times;
+                  Create Circle
                 </button>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', marginBottom: '1.5rem', textAlign: 'center' }}>Create New Circle</h2>
-                <form onSubmit={e => { e.preventDefault(); handleCreateCircle(); }}>
-                  <div style={{ marginBottom: '1.25rem' }}>
-                    <label style={{ display: 'block', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>Circle Name</label>
-                    <input
-                      type="text"
-                      placeholder="Enter circle name"
-                      value={newCircleName}
-                      onChange={e => setNewCircleName(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '0.5rem', fontSize: '1rem', background: '#f9fafb', marginBottom: 0, color: '#1f2937' }}
-                      required
-                    />
-                  </div>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>Type <span style={{ color: '#6b7280', fontWeight: '400' }}>(optional)</span></label>
-                    <select
-                      value={newCircleType}
-                      onChange={e => setNewCircleType(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '0.5rem', fontSize: '1rem', background: '#f9fafb', color: '#1f2937' }}
-                    >
-                      <option value="">Select type</option>
-                      <option value="friends" style={{ color: '#1f2937' }}>Friends</option>
-                      <option value="family" style={{ color: '#1f2937' }}>Family</option>
-                      <option value="roommates" style={{ color: '#1f2937' }}>Roommates</option>
-                      <option value="travel" style={{ color: '#1f2937' }}>Travel</option>
-                      <option value="project" style={{ color: '#1f2937' }}>Project</option>
-                      <option value="colleagues" style={{ color: '#1f2937' }}>Colleagues</option>
-                      <option value="couple" style={{ color: '#1f2937' }}>Couple</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                    <button
-                      type="submit"
-                      style={{ background: '#4c1d95', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontWeight: '700', border: 'none', fontSize: '1rem', transition: 'background 0.2s', boxShadow: '0 2px 8px rgba(30,41,59,0.08)' }}
-                      onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                      onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-                      disabled={!newCircleName.trim()}
-                    >
-                      Create
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCreateForm(false);
-                        setNewCircleName("");
-                        setNewCircleType("");
-                      }}
-                      style={{ background: '#e5e7eb', color: '#4b5563', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600', border: 'none', fontSize: '1rem', transition: 'background 0.2s' }}
-                      onMouseOver={e => (e.currentTarget.style.background = '#d1d5db')}
-                      onMouseOut={e => (e.currentTarget.style.background = '#e5e7eb')}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                  <button
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setNewCircleName("");
+                      setNewCircleType("");
+                    }}
+                    className="flex-1 bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors h-10 px-6 py-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            </Card>
+          </div>
+        )}
 
-          {invitations.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Pending Invitations</h2>
-              <div className="space-y-4">
-                {invitations.map(invite => (
-                  <div key={invite.id} className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{invite.circle?.name || 'Circle'}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Invited by {invite.inviter?.username || invite.inviter_id}</p>
+        {/* Pending Invitations */}
+        {invitations.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-slate-900 mb-6">Pending Invitations</h2>
+            <div className="space-y-4">
+              {invitations.map(invite => (
+                <Card key={invite.id} className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <UserPlus className="w-6 h-6 text-slate-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{invite.circle?.name || 'Circle'}</h3>
+                        <p className="text-sm text-slate-600">
+                          Invited by {invite.inviter?.username || invite.inviter_id}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: '600', border: 'none', transition: 'background 0.2s' }}
-                        onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                        onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => handleAcceptInvitation(invite.id)}
                       >
                         Accept
-                      </button>
-                      <button
-                        style={{ background: '#e5e7eb', color: '#4b5563', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: '500', border: 'none', transition: 'background 0.2s' }}
-                        onMouseOver={e => (e.currentTarget.style.background = '#d1d5db')}
-                        onMouseOut={e => (e.currentTarget.style.background = '#e5e7eb')}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleRejectInvitation(invite.id)}
                       >
-                        Reject
-                      </button>
+                        Decline
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {circles.length === 0 ? (
-            <div className="text-center py-16">
-              <Users className="w-16 h-16 text-gray-300 dark:text-gray-500 mx-auto mb-6" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                No circles yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
-                Create your first circle to start splitting expenses with friends, 
-                or join an existing circle with an invite code.
-              </p>
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', transition: 'background 0.2s' }}
-                  onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                  onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Circle
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {circles.map((circle) => (
-                <div key={circle.id} className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-                  <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: 'white', marginBottom: '0.5rem' }}>
-                    {circle.name} {circle.type && `(${circle.type})`}
-                  </h3>
-                  <p style={{ fontSize: '0.875rem', color: 'white', paddingBottom: '0.5rem' }}>
-                    {circle.members?.length || circle.member_count || 0} members
-                  </p>
-                  <Link to={`/Circles/${circle.id}`}>
-                    <button style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: '600', border: 'none', transition: 'background 0.2s' }}>
-                      View Details
-                    </button>
-                  </Link>
-                </div>
+                </Card>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Circles Grid */}
+        {circles.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="w-12 h-12 text-slate-400" />
+            </div>
+            <h3 className="text-2xl font-semibold text-slate-900 mb-3">
+              No circles yet
+            </h3>
+            <p className="text-lg text-slate-600 mb-8 max-w-md mx-auto">
+              Create your first circle to start splitting expenses with friends, 
+              or join an existing circle with an invite code.
+            </p>
+            <Button 
+              variant="primary" 
+              size="lg"
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create Your First Circle
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {circles.map((circle) => (
+              <Card key={circle.id} className="p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-xl">
+                      {getCircleTypeIcon(circle.type)}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {circle.name}
+                      </h3>
+                      {circle.type && (
+                        <span className="text-xs text-slate-500 uppercase tracking-wide font-medium">
+                          {circle.type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 text-sm text-slate-600 mb-6">
+                  <div className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    <span>{circle.members?.length || circle.member_count || 0} members</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    <span>Active</span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => window.location.href = `/Circles/${circle.id}`}
+                  className="w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors h-10 px-6 py-2 gap-2"
+                >
+                  View Details
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,15 +1,71 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "../components/AuthProvider";
 import { 
   Plus, 
   Users, 
-  ArrowUpRight, 
-  ArrowDownLeft,
-  Clock,
-  DollarSign
+  TrendingUp, 
+  TrendingDown,
+  DollarSign, 
+  Clock3,
+  MoreHorizontal
 } from "lucide-react";
+
+const Button = ({ children, variant = "default", size = "default", className = "", onClick, ...props }) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
+  
+  const variants = {
+    default: "bg-slate-900 text-white hover:bg-slate-800",
+    primary: "bg-slate-900 text-white hover:bg-slate-800",
+    secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
+    outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+  };
+  
+  const sizes = {
+    default: "h-9 px-4 py-2",
+    sm: "h-8 px-3 text-xs",
+    lg: "h-11 px-8"
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+      onClick={onClick}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, className = "", ...props }) => (
+  <div className={`bg-white border border-slate-200 rounded-lg ${className}`} {...props}>
+    {children}
+  </div>
+);
+
+const CardContent = ({ children, className = "", ...props }) => (
+  <div className={`p-6 ${className}`} {...props}>
+    {children}
+  </div>
+);
+
+const Badge = ({ children, variant = "default", className = "", ...props }) => {
+  const variants = {
+    default: "bg-slate-100 text-slate-700 border border-slate-200",
+    green: "bg-green-50 text-green-700 border border-green-200",
+    red: "bg-red-50 text-red-700 border border-red-200",
+    blue: "bg-blue-50 text-blue-700 border border-blue-200"
+  };
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${variants[variant]} ${className}`} {...props}>
+      {children}
+    </span>
+  );
+};
 
 const api = {
   baseURL: 'http://localhost:3000/api',
@@ -20,7 +76,7 @@ const api = {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...(options.headers || {}),
       },
       ...options,
     };
@@ -61,17 +117,17 @@ export default function Dashboard() {
     let owedTo = 0;
     let owes = 0;
 
-    transactions.forEach(transaction => {
+    transactions.forEach((transaction) => {
       if (transaction.created_by === userId) {
-        transaction.members?.forEach(member => {
+        transaction.members?.forEach((member) => {
           if (member.user_id !== userId && member.payment_status === 'pending') {
-            owedTo += parseFloat(member.amount_owed || 0);
+            owedTo += parseFloat(member.amount_owed || '0');
           }
         });
       }
       
       if (transaction.user_payment_status === 'pending' && transaction.is_user_participant) {
-        owes += parseFloat(transaction.user_amount_owed || 0);
+        owes += parseFloat(transaction.user_amount_owed || '0');
       }
     });
 
@@ -102,7 +158,7 @@ export default function Dashboard() {
         const transactionResults = await Promise.all(transactionPromises);
         allTransactions = transactionResults
           .flatMap(result => result.data || [])
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 10);
       }
       setTransactions(allTransactions);
@@ -128,223 +184,255 @@ export default function Dashboard() {
     loadDashboardData();
   };
 
-  if (authLoading) {
+  if (authLoading || isLoading) {
     return (
-      <div className="p-6 space-y-6 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded-lg w-64"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
+      <div className="min-h-screen bg-white">
+        <div className="max-w-4xl mx-auto p-8">
+          <div className="space-y-6 animate-pulse">
+            <div className="h-8 bg-slate-200 rounded w-64"></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-24 bg-slate-100 rounded"></div>
+              <div className="h-24 bg-slate-100 rounded"></div>
+              <div className="h-24 bg-slate-100 rounded"></div>
+            </div>
+            <div className="h-96 bg-slate-100 rounded"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   if (!currentUser) {
-    return (
-      <div className="h-screen flex items-center justify-center px-4 font-sans">
-        <div className="bg-white dark:bg-[#2e2e2e] shadow-md rounded-lg p-4 sm:p-8 max-w-md w-full">
-          <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1f2937', marginBottom: '0.5rem' }}>
-              Please log in
-            </h2>
-            <p style={{ color: '#4b5563', marginBottom: '1rem' }}>
-              You need to be logged in to view your dashboard.
-            </p>
-            <Link to="/login">
-              <button
-                style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-                onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-              >
-                Go to Login
-              </button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-6 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded-lg w-64"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
-          <div className="h-32 bg-gray-200 rounded-xl"></div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 h-96 bg-gray-200 rounded-xl"></div>
-          <div className="h-96 bg-gray-200 rounded-xl"></div>
-        </div>
-      </div>
-    );
+    useNavigate('/'); 
   }
 
   if (error) {
     return (
-      <div className="h-screen flex items-center justify-center px-4 font-sans">
-        <div className="bg-white dark:bg-[#2e2e2e] shadow-md rounded-lg p-4 sm:p-8 max-w-md w-full">
-          <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <div style={{ color: '#ef4444', marginBottom: '1rem' }}>
-              <Clock style={{ width: '3rem', height: '3rem', margin: '0 auto' }} />
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="max-w-sm w-full p-6">
+          <div className="text-center space-y-4">
+            <Clock3 className="w-12 h-12 text-slate-400 mx-auto" />
+            <div className="space-y-2">
+              <h2 className="text-lg font-medium text-slate-900">Something went wrong</h2>
+              <p className="text-slate-600 text-sm">{error}</p>
             </div>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1f2937', marginBottom: '0.5rem' }}>
-              Something went wrong
-            </h2>
-            <p style={{ color: '#4b5563', marginBottom: '1rem' }}>{error}</p>
-            <button
-              onClick={handleRetry}
-              style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-              onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-              onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-            >
+            <Button onClick={handleRetry} variant="outline" className="w-full">
               Try Again
-            </button>
+            </Button>
           </div>
         </div>
       </div>
     );
   }
 
+  const userName = currentUser.username || currentUser.name || currentUser.email?.split('@')[0] || 'there';
+
   return (
-    <div className="h-screen flex items-center justify-center px-4 font-sans">
-      <div className="bg-white dark:bg-[#2e2e2e] shadow-md rounded-lg p-4 sm:p-8 max-w-7xl w-full">
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+    <div className="min-h-screen bg-white">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="px-8 pt-12 pb-8">
+          <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                Welcome back, {currentUser.username || currentUser.name || currentUser.email || 'there'}!
+              <h1 className="text-2xl font-semibold text-slate-900 mb-2">
+                Good morning, {userName}
               </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Here's your expense overview
+              <p className="text-slate-600 text-sm">
+                Here's what's happening with your expenses
               </p>
             </div>
-            <div className="flex gap-3 flex-wrap">
-              <Link to={createPageUrl("AddExpense")}>
-                <button
-                  style={{ display: 'flex', alignItems: 'center', background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-                  onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                  onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-                >
-                  <Plus style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
+            <div className="flex gap-2">
+              <Link to={createPageUrl("expense")}>
+                <Button variant="primary" size="md">
+                  <Plus className="w-4 h-4 mr-1.5" />
                   Add Expense
-                </button>
+                </Button>
               </Link>
-              <Link to={createPageUrl("Circles")}>
-                <button
-                  style={{ display: 'flex', alignItems: 'center', background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-                  onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                  onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-                >
-                  <Users style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-                  Manage Circles
-                </button>
+              <Link to={createPageUrl("circles")}>
+                <Button variant="secondary" size="md">
+                  <Users className="w-4 h-4 mr-1.5" />
+                  Circles
+                </Button>
               </Link>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-              <h3 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-1">You're owed</h3>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">${balances.owedTo || 0}</p>
-              <ArrowDownLeft className="w-6 h-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-              <h3 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-1">You owe</h3>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">${balances.owes || 0}</p>
-              <ArrowUpRight className="w-6 h-6 text-red-600 dark:text-red-400" />
-            </div>
-            <div className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-              <h3 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-1">Net balance</h3>
-              <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">${balances.net ?? (balances.owedTo - balances.owes)}</p>
-              <DollarSign className="w-6 h-6 text-gray-700 dark:text-gray-300" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Recent Activity</h3>
-              {transactions.length === 0 ? (
-                <p className="text-gray-600 dark:text-gray-400 text-center">No recent activity</p>
-              ) : (
-                <ul className="list-none p-0 space-y-2">
-                  {transactions.map((transaction) => (
-                    <li key={transaction.id} className="p-2 border-b border-gray-300 dark:border-gray-600">
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{transaction.description || 'Transaction'}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(transaction.created_at).toLocaleDateString()}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="bg-white dark:bg-[#2e2e2e] border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-md">
-              <div className="pb-3 mb-3 border-b border-gray-300 dark:border-gray-600">
-                <h3 className="flex items-center text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                  <Users className="w-5 h-5 text-indigo-600 mr-2" />
-                  My Circles
-                </h3>
-                <span className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-sm">
-                  {circles.length}
-                </span>
-              </div>
-              <div>
-                {circles.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400 mb-2">No circles yet</p>
-                    <Link to={createPageUrl("Circles")}>
-                      <button
-                        style={{ background: '#4c1d95', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none', transition: 'background 0.2s' }}
-                        onMouseOver={e => (e.currentTarget.style.background = '#381e72')}
-                        onMouseOut={e => (e.currentTarget.style.background = '#4c1d95')}
-                      >
-                        <Plus style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-                        Create your first circle
-                      </button>
-                    </Link>
+          {/* Balance Overview */}
+          <div className="grid grid-cols-3 gap-4 mb-12">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
                   </div>
-                ) : (
-                  <>
-                    {circles.slice(0, 3).map((circle) => (
-                      <div key={circle.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-md mb-2">
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{circle.name}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {circle.members?.length || circle.member_count || 0} members
-                          </p>
-                        </div>
-                        <Link to={createPageUrl(`Circles/${circle.id}`)}>
-                          <button
-                            style={{ color: '#2b6cb0', background: 'none', border: '1px solid #2b6cb0', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', cursor: 'pointer', fontWeight: '500', transition: 'background 0.2s' }}
-                            onMouseOver={e => (e.currentTarget.style.background = '#ebf8ff')}
-                            onMouseOut={e => (e.currentTarget.style.background = 'none')}
-                          >
-                            View
-                          </button>
-                        </Link>
-                      </div>
-                    ))}
-                    {circles.length > 3 && (
-                      <Link to={createPageUrl("Circles")}>
-                        <button
-                          style={{ width: '100%', border: '1px solid #d1d5db', color: '#4b5563', padding: '0.5rem', borderRadius: '0.375rem', background: '#e5e7eb', fontWeight: '500', transition: 'background 0.2s' }}
-                          onMouseOver={e => (e.currentTarget.style.background = '#d1d5db')}
-                          onMouseOut={e => (e.currentTarget.style.background = '#e5e7eb')}
-                        >
-                          View all circles ({circles.length})
-                        </button>
-                      </Link>
-                    )}
-                  </>
-                )}
+                  <Badge variant="green">You're owed</Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-semibold text-slate-900">
+                    ${(balances.owedTo || 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-slate-500">From friends</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4 text-red-600" />
+                  </div>
+                  <Badge variant="red">You owe</Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-semibold text-slate-900">
+                    ${(balances.owes || 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-slate-500">To friends</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <Badge variant="blue">Net balance</Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-semibold text-slate-900">
+                    ${Math.abs(balances.net || 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {balances.net >= 0 ? 'In your favor' : 'You owe overall'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <div className="px-8 pb-12">
+          <div className="grid grid-cols-3 gap-8">
+            {/* Recent Activity */}
+            <div className="col-span-2">
+              <div className="mb-4">
+                <h2 className="text-lg font-medium text-slate-900">Recent Activity</h2>
+                <p className="text-sm text-slate-500">Your latest transactions</p>
               </div>
+
+              <Card>
+                <CardContent className="p-0">
+                  {transactions.length === 0 ? (
+                    <div className="p-12 text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <DollarSign className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <p className="text-slate-600 font-medium mb-1">No recent activity</p>
+                      <p className="text-sm text-slate-500">Start by adding your first expense</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {transactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                              <DollarSign className="w-4 h-4 text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900 text-sm">
+                                {transaction.description || transaction.name || 'Transaction'}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {new Date(transaction.created_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900">
+                              ${(transaction.total_amount || transaction.amount || 0).toFixed(2)}
+                            </span>
+                            <button className="p-1 hover:bg-slate-100 rounded">
+                              <MoreHorizontal className="w-3 h-3 text-slate-400" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* My Circles */}
+            <div>
+              <div className="mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-medium text-slate-900">My Circles</h2>
+                    <p className="text-sm text-slate-500">{circles.length} active</p>
+                  </div>
+                </div>
+              </div>
+
+              <Card>
+                <CardContent className="p-0">
+                  {circles.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <Users className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <p className="text-slate-600 font-medium mb-1">No circles yet</p>
+                      <p className="text-sm text-slate-500 mb-4">Create your first circle to get started</p>
+                      <Link to={createPageUrl("Circles")}>
+                        <Button variant="primary" size="sm">
+                          <Plus className="w-4 h-4 mr-1.5" />
+                          Create Circle
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {circles.slice(0, 5).map((circle) => (
+                        <div key={circle.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                              <Users className="w-4 h-4 text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900 text-sm">{circle.name}</p>
+                              <p className="text-xs text-slate-500">
+                                {circle.members?.length || circle.member_count || 0} members
+                              </p>
+                            </div>
+                          </div>
+                          <Link to={createPageUrl(`Circles/${circle.id}`)}>
+                            <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900">
+                              View
+                            </Button>
+                          </Link>
+                        </div>
+                      ))}
+                      {circles.length > 5 && (
+                        <div className="p-4">
+                          <Link to={createPageUrl("Circles")}>
+                            <Button variant="outline" size="sm" className="w-full">
+                              View all circles ({circles.length})
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>

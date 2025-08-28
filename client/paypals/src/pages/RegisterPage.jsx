@@ -1,6 +1,34 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
+import { Eye, EyeOff } from "lucide-react";
+
+const Button = ({ children, variant = "default", size = "default", className = "", ...props }) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
+  
+  const variants = {
+    default: "bg-slate-900 text-white hover:bg-slate-800",
+    primary: "bg-slate-900 text-white hover:bg-slate-800",
+    secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
+    outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+  };
+  
+  const sizes = {
+    default: "h-10 px-6 py-2",
+    sm: "h-8 px-3 text-xs",
+    lg: "h-12 px-8 text-base"
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -17,7 +45,7 @@ const RegisterPage = () => {
 
   useEffect(() => {
     if (currentUser) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [currentUser, navigate]);
 
@@ -54,12 +82,15 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="h-screen flex items-center justify-center px-4 font-sans">
-      <div className="bg-white dark:bg-[#2e2e2e] shadow-md rounded-lg p-4 sm:p-8 max-w-md w-full">
-        <h2 className="text-3xl font-bold mb-6 text-center">Register</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+      <div className="bg-white border border-slate-200 rounded-lg p-6 sm:p-10 max-w-md w-full shadow-sm">
+        <h2 className="text-3xl font-bold text-slate-900 mb-6 text-center">Register</h2>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-md font-medium mb-1" htmlFor="username">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-2"
+              htmlFor="username"
+            >
               Username
             </label>
             <input
@@ -68,67 +99,75 @@ const RegisterPage = () => {
               name="username"
               value={formData.username}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
+              className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
               required
+              aria-describedby="username-error"
             />
           </div>
 
           <div>
-            <label className="block text-md font-medium mb-1" htmlFor="password">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-2"
+              htmlFor="password"
+            >
               Password
             </label>
-            <input
-              type={showPassword ? "text" : "password"}
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
-              required
-            />
-            <div className="flex items-center mt-2">
+            <div className="relative">
               <input
-                type="checkbox"
-                id="showPassword"
-                checked={showPassword}
-                onChange={(e) => setShowPassword(e.target.checked)}
-                className="w-4 h-4 text-red-600 bg-white dark:bg-[#2e2e2e] border-gray-300 dark:border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+                type={showPassword ? "text" : "password"}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                required
+                aria-describedby="password-error"
               />
-              <label htmlFor="showPassword" className="ml-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                Show password
-              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="bg-transparent absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-600 hover:text-slate-900"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-md font-medium mb-1" htmlFor="confirmPassword">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-2"
+              htmlFor="confirmPassword"
+            >
               Confirm Password
             </label>
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              id="confirmPassword"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
-              required
-            />
-            <div className="flex items-center mt-2">
+            <div className="relative">
               <input
-                type="checkbox"
-                id="showConfirmPassword"
-                checked={showConfirmPassword}
-                onChange={(e) => setShowConfirmPassword(e.target.checked)}
-                className="w-4 h-4 text-red-600 bg-white dark:bg-[#2e2e2e] border-gray-300 dark:border-gray-600 rounded"
+                type={showConfirmPassword ? "text" : "password"}
+                id="confirmPassword"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none"
+                required
+                aria-describedby="confirmPassword-error"
               />
-              <label htmlFor="showConfirmPassword" className="ml-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                Show password
-              </label>
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="bg-transparent absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-600"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              >
+                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-md font-medium mb-1" htmlFor="email">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-2"
+              htmlFor="email"
+            >
               Email
             </label>
             <input
@@ -137,34 +176,35 @@ const RegisterPage = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
+              className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
               required
+              aria-describedby="email-error"
             />
           </div>
 
-          {error && <p className="text-red-500 text-md">{error}</p>}
+          {error && (
+            <p className="text-red-500 text-sm" id="form-error">
+              {error}
+            </p>
+          )}
 
-          <button
+          <Button
             type="submit"
-            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md"
+            variant="primary"
+            size="lg"
+            className="w-full"
+            aria-label="Register"
           >
             Register
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            onClick={handleGuestClick}
-            className="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md"
-          >
-            Continue as Guest
-          </button>
-
-          <div className="text-md text-center mt-2">
-            Already have an account?{" "}
+          <div className="text-sm text-center text-slate-600">
+            Already have an account?&nbsp;&nbsp;&nbsp;
             <button
               onClick={() => navigate("/login")}
-              className="text-red-500 hover:underline"
+              className="text-white hover:underline font-medium"
               type="button"
+              aria-label="Navigate to login page"
             >
               Login
             </button>
