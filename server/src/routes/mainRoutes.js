@@ -104,13 +104,13 @@ router.post("/logout", (req, res) => {
 });
 
 const circleRoutes = require('../routes/circleRoutes.js'); 
-router.use('/circle', circleRoutes); 
+router.use('/circles', circleRoutes); 
 
 const invitationRoutes = require('../routes/invitationRoutes.js');
 router.use('/invitations', invitationRoutes);
 
 const transactionRoutes = require('../routes/transactionRoutes.js');
-router.use('/transaction', jwtMiddleware.verifyAccessToken, transactionRoutes);
+router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
 
 //////////////////////////////////////////////////////
 // EXPORT ROUTER

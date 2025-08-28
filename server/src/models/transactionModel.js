@@ -630,5 +630,27 @@ module.exports = {
             console.error('Error updating payment status:', error);
             throw error;
         }
-    }
+    }, 
+
+    getUserTransactions: async (userId) => {
+        try {
+            const userTransactions = await prisma.transaction.findMany({
+                where: {
+                    OR: [
+                        { members: { some: { user_id: userId } } },
+                        { created_by: userId }
+                    ]
+                }
+            })
+
+            if(!userTransactions || userTransactions.length === 0){
+                throw new Error('No transactions found for this user');
+            }
+
+            return userTransactions;
+        } catch (error) {
+            console.error('Error fetching user transactions:', error);
+            throw error;
+        }
+    },
 };

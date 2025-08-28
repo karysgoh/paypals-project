@@ -42,6 +42,16 @@ router.get(
     transactionController.getCircleTransactions
 );
 
+router.get(
+    '/user',
+    transactionController.getUserTransactions
+);
+
+router.get(
+    '/user/summary',
+    transactionController.getUserTransactionSummary
+)
+
 router.patch(
     '/:transactionId/status',
     transactionController.updatePaymentStatus

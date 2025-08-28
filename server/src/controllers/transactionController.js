@@ -18,6 +18,7 @@ const mapTransactionError = (error) => {
     if (message.toLowerCase().includes('cannot delete transaction with paid participants')) return { status: 400, message: message };
     if (message.toLowerCase().includes('only transaction creator or circle admin can')) return { status: 403, message: message };
     if (message.toLowerCase().includes('invalid payment status')) return { status: 400, message: message };
+    if (message.toLowerCase().includes('no transactions found for this user')) return { status: 404, message: message };
 	return { status: 500, message: 'Internal server error' };
 };
 
@@ -395,6 +396,27 @@ module.exports = {
 
         } catch (error) {
             logger.error(`Error getting user transaction summary: ${error}`);
+            const mapped = mapTransactionError(error);
+            return next(new AppError(mapped.message, mapped.status));
+        }
+    }), 
+
+    getUserTransactions: catchAsync(async (req, res, next) => {
+        const userId = res.locals.user_id;
+
+        try {
+            const result = await transactionModel.getUserTransactions(userId);
+
+            logger.info('User transactions retrieved successfully');
+
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    transactions: result
+                }
+            });
+        } catch (error) {
+            logger.error(`Error getting user transactions: ${error}`);
             const mapped = mapTransactionError(error);
             return next(new AppError(mapped.message, mapped.status));
         }
