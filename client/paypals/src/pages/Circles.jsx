@@ -66,7 +66,7 @@ export default function Circles() {
       const currentUser = await userRes.json();
       setUser(currentUser);
 
-      const circlesRes = await fetch('http://localhost:3000/api/circle/user', { credentials: 'include' });
+      const circlesRes = await fetch('http://localhost:3000/api/circles/user', { credentials: 'include' });
       if (!circlesRes.ok) throw new Error('Failed to fetch circles');
       const userCircles = await circlesRes.json();
       setCircles(userCircles.data || []);
@@ -186,6 +186,7 @@ export default function Circles() {
             variant="primary" 
             onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-2"
+            size="md"
           >
             <Plus className="w-4 h-4" />
             Create Circle
