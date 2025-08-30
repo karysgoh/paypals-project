@@ -87,7 +87,8 @@ module.exports = {
                     username: true,
                     email: true,       
                     status: true,       
-                    role_id: true,     
+                    role_id: true, 
+                    email_verified: true    
                 },
             });
             return user;

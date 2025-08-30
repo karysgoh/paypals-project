@@ -43,7 +43,8 @@ router.post(
         user_id: res.locals.user_id,
         username: res.locals.username,
         role_id: res.locals.role_id,
-        role_name: res.locals.role_name
+        role_name: res.locals.role_name, 
+        email_verified: res.locals.email_verified
       }
     });
   }
@@ -66,7 +67,8 @@ router.post(
         user_id: res.locals.user_id,
         username: res.locals.username,
         role_id: res.locals.role_id,
-        role_name: res.locals.role_name
+        role_name: res.locals.role_name, 
+        email_verified: res.locals.email_verified
       }
     });
   }
@@ -82,7 +84,8 @@ router.get('/me', jwtMiddleware.verifyAccessToken, (req, res) => {
     user_id: req.user.user_id,
     username: req.user.username,
     role_id: req.user.role_id,
-    role_name: req.user.role_name
+    role_name: req.user.role_name,
+    email_verified: req.user.email_verified
   };
   res.status(200).json(user);
 });

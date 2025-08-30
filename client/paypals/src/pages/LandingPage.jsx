@@ -73,18 +73,18 @@ function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <section className="pt-20 pb-16">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h1 className="text-5xl font-bold text-slate-900 mb-6 leading-tight">
+      <section className="pt-12 pb-12 sm:pt-20 sm:pb-16">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 mb-4 sm:mb-6 leading-tight">
             Split expenses with friends,
             <br />
             <span className="text-slate-600">the smart way</span>
           </h1>
-          <p className="text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-slate-600 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto">
             Keep track of shared expenses and settle up with friends easily. 
             No more awkward money conversations or forgotten IOUs.
           </p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button variant="primary" size="lg" onClick={() => useNavigate('/register')}>
               Start Splitting
               <ArrowRight className="w-4 h-4 ml-2" />
@@ -94,8 +94,8 @@ function LandingPage() {
             </Button>
           </div>
           
-          <div className="mt-16 relative">
-            <Card className="p-8 max-w-2xl mx-auto shadow-sm">
+          <div className="mt-12 sm:mt-16 relative px-4 sm:px-0">
+            <Card className="p-6 sm:p-8 max-w-2xl mx-auto shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-slate-900">Dinner with Friends</h3>
                 <span className="text-2xl font-bold text-slate-900">$120.00</span>
@@ -120,8 +120,8 @@ function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-12 sm:py-20 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
               Everything you need to split expenses
@@ -131,7 +131,7 @@ function LandingPage() {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
             <FeatureCard
               icon={Users}
               title="Create Circles"
@@ -167,8 +167,8 @@ function LandingPage() {
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-6">
+      <section className="py-12 sm:py-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
               How PayPals works
@@ -178,7 +178,7 @@ function LandingPage() {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 sm:gap-12">
             <StepCard
               number="1"
               title="Create a Circle"
@@ -199,8 +199,8 @@ function LandingPage() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 bg-slate-50">
-        <div className="max-w-4xl mx-auto px-6">
+      <section className="py-8 sm:py-16 bg-slate-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
             <div>
               <div className="text-3xl font-bold text-slate-900 mb-2">50K+</div>
@@ -219,8 +219,8 @@ function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-6 text-center">
+      <section className="py-12 sm:py-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-3xl font-bold text-slate-900 mb-4">
             Ready to split smarter?
           </h2>
@@ -228,7 +228,7 @@ function LandingPage() {
             Join thousands of people who've simplified their shared expenses. 
             Start tracking and splitting costs with your friends today.
           </p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button variant="primary" size="lg" onClick={() => useNavigate('/register')}>
               Get Started Free
               <ArrowRight className="w-4 h-4 ml-2" />
@@ -241,8 +241,8 @@ function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 py-12">
-        <div className="max-w-6xl mx-auto px-6">
+      <footer className="border-t border-slate-200 py-8 sm:py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="flex items-center gap-2 mb-4 md:mb-0">
               <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">

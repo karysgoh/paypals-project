@@ -29,7 +29,7 @@ const sendVerificationEmail = async (email, token, username) => {
   try {
     const transporter = createTransporter();
     
-    const verificationUrl = `${process.env.FRONTEND_URL}/api/verify-email/${token}`;
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
     
     const mailOptions = {
       from: {

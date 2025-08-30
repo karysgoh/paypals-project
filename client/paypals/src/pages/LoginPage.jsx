@@ -31,17 +31,49 @@ const Button = ({ children, variant = "default", size = "default", className = "
 };
 
 const LoginPage = () => {
-  const { handleLogin, currentUser } = useAuth();
+  const { handleLogin, currentUser, handleLogout } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   useEffect(() => {
-    if (currentUser) {
+    if (!currentUser) return;
+    if (currentUser.email_verified) {
       navigate("/dashboard");
+      return;
     }
+    setNeedsVerification(true);
   }, [currentUser, navigate]);
+
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+  const handleResend = async () => {
+    if (!currentUser?.email) {
+      setResendMsg('No email available to resend to.');
+      return;
+    }
+    setIsResending(true);
+    setResendMsg('');
+    try {
+      const res = await fetch(`${apiBase}/resend-verification`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || 'Failed to resend');
+      setResendMsg(json.message || 'Verification email resent. Check your inbox.');
+    } catch (e) {
+      setResendMsg(e.message || 'Failed to resend verification email.');
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -57,9 +89,35 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 bg-slate-50">
       <div className="bg-white border border-slate-200 rounded-lg p-6 sm:p-10 max-w-md w-full shadow-sm">
-        <h2 className="text-3xl font-bold text-slate-900 mb-6 text-center">Login</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-6 text-center">Login</h2>
+        {needsVerification && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-100 rounded text-sm text-slate-800">
+            <p className="mb-2">Your account is logged in but your email is not verified yet. Please verify your email to access the dashboard.</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleResend}
+                className="px-3 py-2 bg-yellow-600 text-white rounded text-sm"
+                disabled={isResending}
+                aria-label="Resend verification email"
+              >
+                {isResending ? 'Resending...' : 'Resend verification email'}
+              </button>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  navigate('/');
+                }}
+                className="px-3 py-2 bg-slate-100 text-slate-800 rounded text-sm"
+                aria-label="Logout"
+              >
+                Logout
+              </button>
+            </div>
+            {resendMsg && <p className="mt-2 text-sm text-slate-700">{resendMsg}</p>}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label
@@ -76,7 +134,7 @@ const LoginPage = () => {
               onChange={handleChange}
               className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-slate-400"
               required
-              aria-describedby="username-error"
+              aria-describedby="form-error"
             />
           </div>
 
@@ -96,7 +154,7 @@ const LoginPage = () => {
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
                   required
-                  aria-describedby="password-error"
+                  aria-describedby="form-error"
                 />
                 <button
                   type="button"
@@ -110,7 +168,7 @@ const LoginPage = () => {
             </div>
 
           {error && (
-            <p className="text-red-500 text-sm" id="form-error">
+            <p className="text-red-500 text-sm" id="form-error" role="alert" aria-live="assertive">
               {error}
             </p>
           )}
@@ -129,7 +187,7 @@ const LoginPage = () => {
             Don't have an account?&nbsp;&nbsp;&nbsp;
             <button
               onClick={() => navigate("/register")}
-              className="text-white hover:underline font-small"
+              className="text-indigo-600 hover:underline font-medium"
               type="button"
               aria-label="Navigate to register page"
             >

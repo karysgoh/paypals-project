@@ -173,7 +173,7 @@ export default function Circles() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-6xl mx-auto px-6 py-16">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
           <div>
@@ -196,7 +196,7 @@ export default function Circles() {
         {/* Create Circle Modal */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md p-6 relative">
+            <Card className="w-full max-w-md sm:max-w-lg p-4 sm:p-6 relative">
               <button
                 onClick={() => {
                   setShowCreateForm(false);
@@ -220,7 +220,7 @@ export default function Circles() {
                     placeholder="Enter circle name"
                     value={newCircleName}
                     onChange={(e) => setNewCircleName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900"
                     required
                   />
                 </div>
@@ -232,7 +232,7 @@ export default function Circles() {
                   <select
                     value={newCircleType}
                     onChange={(e) => setNewCircleType(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 bg-white text-slate-900"
                   >
                     <option value="">Select type</option>
                     <option value="friends">Friends</option>

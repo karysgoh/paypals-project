@@ -32,6 +32,7 @@ module.exports = {
     res.locals.hash = results.password;        
     res.locals.role_id = results.role?.id || null;      
     res.locals.role_name = results.role?.role_name || null; 
+    res.locals.email_verified = results.email_verified;
     next();
   }),
 
@@ -76,6 +77,7 @@ module.exports = {
     res.locals.email = results.email;
     res.locals.role_id = results.role?.id || null;      
     res.locals.role_name = results.role?.role_name || null; 
+    res.locals.email_verified = results.email_verified || false;
     next();
   }),
 

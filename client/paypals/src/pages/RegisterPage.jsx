@@ -30,9 +30,44 @@ const Button = ({ children, variant = "default", size = "default", className = "
   );
 };
 
+const api = {
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      ...options,
+    };
+    try {
+      const response = await fetch(url, config);
+      if (!response.ok) {
+        const error = new Error(`HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error(`API request failed for ${endpoint}:`, error);
+      throw error;
+    }
+  },
+
+  async register({ username, password, email }) {
+    return this.request('/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email }),
+    });
+  },
+};
+
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const { handleRegister, currentUser } = useAuth();
+  const { currentUser } = useAuth();
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -46,10 +81,20 @@ const RegisterPage = () => {
   const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
-    if (currentUser && !isRegistering) {
-      navigate("/dashboard", { replace: true });
+    if (currentUser && currentUser.email_verified) {
+      navigate("/dashboard");
     }
-  }, [currentUser, navigate, isRegistering]);
+  }, [currentUser, navigate]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess("");
+        setFormData({ username: "", password: "", confirmPassword: "", email: "" });
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -67,34 +112,55 @@ const RegisterPage = () => {
 
     setIsRegistering(true);
     try {
-      const response = await handleRegister({
+      const response = await api.register({
         username: formData.username,
         password: formData.password,
         email: formData.email,
       });
       setSuccess(response.message || "Verification email sent. Please check your inbox.");
+      sessionStorage.setItem("registrationEmail", formData.email); 
     } catch (error) {
       console.error("Register failed:", error);
-      console.log("Error object:", { message: error.message, status: error.status });
       setError(
-        error.message && typeof error.message === "string"
-          ? error.message
-          : "Registration failed. Please try a different username or email."
+        error.status === 400
+          ? "Invalid input. Please check your username or email."
+          : error.status === 409
+          ? "Username or email already exists."
+          : "Registration failed. Please try again."
       );
     } finally {
       setIsRegistering(false);
     }
   };
 
+  const getPasswordStrength = (password) => {
+    if (!password) return { strength: "Weak", message: "Password is empty" };
+    if (password.length < 8) return { strength: "Weak", message: "Password must be at least 8 characters" };
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasDigit = /[0-9]/.test(password);
+    const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
+
+    if (!hasUpperCase || !hasDigit || !hasSpecialChar) {
+      const missing = [];
+      if (!hasUpperCase) missing.push("uppercase letter");
+      if (!hasDigit) missing.push("number");
+      if (!hasSpecialChar) missing.push("special character");
+      return { strength: "Moderate", message: `Add ${missing.join(", ")} for a stronger password` };
+    }
+
+    return { strength: "Strong", message: "Password is strong!" };
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 bg-slate-50" style={{ width: '100%' }}>
       <div className="bg-white border border-slate-200 rounded-lg p-6 sm:p-10 max-w-md w-full shadow-sm">
-        <h2 className="text-4xl font-bold text-slate-900 mb-6 text-center">Register</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-4 sm:mb-6 text-center">Register</h2>
         {success ? (
           <div className="text-center space-y-4">
             <div className="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center mx-auto">
               <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <p className="text-base text-green-500">{success}</p>
@@ -110,7 +176,7 @@ const RegisterPage = () => {
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
             <div>
               <label
                 className="block text-base font-medium text-slate-700 mb-2"
@@ -124,9 +190,9 @@ const RegisterPage = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
                 required
-                aria-describedby="username-error"
+                aria-describedby="form-error"
                 disabled={isRegistering}
               />
             </div>
@@ -145,9 +211,9 @@ const RegisterPage = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
                   required
-                  aria-describedby="password-error"
+                  aria-describedby="form-error"
                   disabled={isRegistering}
                 />
                 <button
@@ -160,6 +226,19 @@ const RegisterPage = () => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {formData.password && (
+                <p
+                  className={`text-sm mt-1 ${
+                    getPasswordStrength(formData.password).strength === "Weak"
+                      ? "text-red-500"
+                      : getPasswordStrength(formData.password).strength === "Moderate"
+                      ? "text-yellow-500"
+                      : "text-green-500"
+                  }`}
+                >
+                  {getPasswordStrength(formData.password).message}
+                </p>
+              )}
             </div>
 
             <div>
@@ -176,9 +255,9 @@ const RegisterPage = () => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
                   required
-                  aria-describedby="confirmPassword-error"
+                  aria-describedby="form-error"
                   disabled={isRegistering}
                 />
                 <button
@@ -206,15 +285,15 @@ const RegisterPage = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
                 required
-                aria-describedby="email-error"
+                aria-describedby="form-error"
                 disabled={isRegistering}
               />
             </div>
 
             {error && (
-              <p className="text-red-500 text-base" id="form-error">
+              <p className="text-red-500 text-base" id="form-error" role="alert" aria-live="assertive">
                 {error}
               </p>
             )}
@@ -241,7 +320,7 @@ const RegisterPage = () => {
               Already have an account?&nbsp;&nbsp;&nbsp;
               <button
                 onClick={() => navigate("/login")}
-                className="text-white hover:underline font-medium"
+                className="text-indigo-600 hover:underline font-medium"
                 type="button"
                 aria-label="Navigate to login page"
                 disabled={isRegistering}

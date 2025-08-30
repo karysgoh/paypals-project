@@ -192,15 +192,15 @@ export default function Dashboard() {
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-white">
-        <div className="max-w-4xl mx-auto p-8">
+        <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="space-y-6 animate-pulse">
             <div className="h-10 bg-slate-200 rounded w-72"></div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="h-28 bg-slate-100 rounded"></div>
               <div className="h-28 bg-slate-100 rounded"></div>
               <div className="h-28 bg-slate-100 rounded"></div>
             </div>
-            <div className="h-96 bg-slate-100 rounded"></div>
+            <div className="h-80 sm:h-96 bg-slate-100 rounded"></div>
           </div>
         </div>
       </div>
@@ -230,25 +230,25 @@ export default function Dashboard() {
     <div className="min-h-screen bg-white">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="px-8 pt-12 pb-8">
-          <div className="flex items-center justify-between mb-8">
+        <div className="px-4 sm:px-8 pt-10 sm:pt-12 pb-6 sm:pb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">
+        <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">
                 Welcome back, {userName}
               </h1>
-              <p className="text-lg text-slate-600">
+        <p className="text-base sm:text-lg text-slate-600">
                 Here's what's happening with your expenses
               </p>
             </div>
-            <div className="flex gap-2">
-              <Link to={createPageUrl("expense")}>
-                <Button variant="primary" size="md">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Link to={createPageUrl("expense")} className="w-full sm:w-auto">
+                <Button variant="primary" size="md" className="w-full sm:w-auto">
                   <Plus className="w-5 h-5 mr-1.5" />
                   Add Expense
                 </Button>
               </Link>
-              <Link to={createPageUrl("circles")}>
-                <Button variant="secondary" size="md">
+              <Link to={createPageUrl("circles")} className="w-full sm:w-auto">
+                <Button variant="secondary" size="md" className="w-full sm:w-auto">
                   <Users className="w-5 h-5 mr-1.5" />
                   Circles
                 </Button>
@@ -257,7 +257,7 @@ export default function Dashboard() {
           </div>
 
           {/* Balance Overview */}
-          <div className="grid grid-cols-3 gap-4 mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -267,7 +267,7 @@ export default function Dashboard() {
                   <Badge variant="green">You're owed</Badge>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-3xl font-semibold text-slate-900">
+                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
                     ${(balances.owedTo || 0).toFixed(2)}
                   </p>
                   <p className="text-sm text-slate-500">From friends</p>
@@ -284,7 +284,7 @@ export default function Dashboard() {
                   <Badge variant="red">You owe</Badge>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-3xl font-semibold text-slate-900">
+                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
                     ${(balances.owes || 0).toFixed(2)}
                   </p>
                   <p className="text-sm text-slate-500">To friends</p>
@@ -301,7 +301,7 @@ export default function Dashboard() {
                   <Badge variant="blue">Net balance</Badge>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-3xl font-semibold text-slate-900">
+                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
                     ${Math.abs(balances.net || 0).toFixed(2)}
                   </p>
                   <p className="text-sm text-slate-500">
@@ -313,10 +313,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="px-8 pb-12">
-          <div className="grid grid-cols-3 gap-8">
+        <div className="px-4 sm:px-8 pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Recent Activity */}
-            <div className="col-span-2">
+            <div className="lg:col-span-2">
               <div className="mb-4">
                 <h2 className="text-xl font-medium text-slate-900">Recent Activity</h2>
                 <p className="text-base text-slate-500">Your latest transactions</p>

@@ -12,7 +12,7 @@ module.exports = {
   generateTokens: (req, res, next) => {
     console.log(`Generating access and refresh JWT tokens`);
 
-    const { user_id, username, role_id, role_name } = res.locals;
+    const { user_id, username, role_id, role_name, email_verified } = res.locals;
 
     if (!user_id) {
       console.error('User ID not found in res.locals');
@@ -24,6 +24,7 @@ module.exports = {
       username: username || null,
       role_id: role_id || 3,
       role_name: role_name, 
+      email_verified: email_verified,
       timestamp: new Date()
     };
 
@@ -82,6 +83,7 @@ module.exports = {
           username: decoded.username,
           role_id: decoded.role_id,
           role_name: decoded.role_name,
+          email_verified: decoded.email_verified,
           timestamp: new Date()
         };
 
@@ -148,6 +150,7 @@ module.exports = {
         username: decoded.username,
         role_id: decoded.role_id,
         role_name: decoded.role_name,
+        email_verified: decoded.email_verified,
         timestamp: new Date()
       };
 
