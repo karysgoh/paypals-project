@@ -187,7 +187,7 @@ const LoginPage = () => {
             Don't have an account?&nbsp;&nbsp;&nbsp;
             <button
               onClick={() => navigate("/register")}
-              className="text-indigo-600 hover:underline font-medium"
+              className="text-white hover:underline font-medium"
               type="button"
               aria-label="Navigate to register page"
             >

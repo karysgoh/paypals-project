@@ -263,7 +263,7 @@ module.exports = {
                 }
 
                 // 4) Check for outstanding balances before deletion
-                const pendingTransactions = await tx.transactionParticipant.count({
+                const pendingTransactions = await tx.transactionMember.count({
                     where: {
                         transaction: {
                             circle_id: circleId
@@ -331,7 +331,7 @@ module.exports = {
                 }
 
                 // 3) Check if user has outstanding balances
-                const unpaidTransactions = await tx.transactionParticipant.count({
+                const unpaidTransactions = await tx.transactionMember.count({
                     where: {
                         user_id: userId,
                         transaction: {
@@ -433,7 +433,7 @@ module.exports = {
                 }
 
                 // 5) Check if target member has outstanding balances
-                const unpaidTransactions = await tx.transactionParticipant.count({
+                const unpaidTransactions = await tx.transactionMember.count({
                     where: {
                         user_id: memberId,
                         transaction: {
@@ -492,12 +492,8 @@ module.exports = {
 
     updateMemberRole: async (circleId, memberId, newRole, userId) => {
         try {
-            // Ensure newRole is part of the CircleMemberRole enum
-            if (
-                !Prisma ||
-                !Prisma.CircleMemberRole ||
-                !Object.values(Prisma.CircleMemberRole).includes(newRole)
-            ) {
+            // Validate the role
+            if (!['admin', 'member'].includes(newRole)) {
                 throw new Error('Invalid circle member role');
             }
 
