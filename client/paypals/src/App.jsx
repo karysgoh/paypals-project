@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import Circles from "./pages/Circles";
+import CircleDetail from "./pages/CircleDetail";
 import LandingPage from "./pages/LandingPage";
 import NavBar from "./components/NavBar";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -44,6 +45,7 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/circles" element={<Circles />} />
+              <Route path="/circles/:id" element={<CircleDetail />} />
             </Route>
           </Route>
         </Routes>

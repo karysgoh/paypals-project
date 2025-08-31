@@ -56,6 +56,23 @@ class GoogleMapsService {
       throw error;
     }
   }
+
+  async textSearch(query, radius = 1000) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/place/textsearch/json`, {
+        params: {
+          query,
+          radius,
+          key: this.apiKey
+        }
+      });
+
+      return response.data.results;
+    } catch (error) {
+      console.error('Error performing text search:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new GoogleMapsService();

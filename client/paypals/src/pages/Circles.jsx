@@ -93,7 +93,7 @@ export default function Circles() {
         name: newCircleName,
         type: newCircleType || undefined,
       };
-      const res = await fetch('http://localhost:3000/api/circle', {
+      const res = await fetch('http://localhost:3000/api/circles', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -368,7 +368,7 @@ export default function Circles() {
                 </div>
                 
                 <button
-                  onClick={() => window.location.href = `/Circles/${circle.id}`}
+                  onClick={() => window.location.href = `/circles/${circle.id}`}
                   className="w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors h-10 px-6 py-2 gap-2"
                 >
                   View Details

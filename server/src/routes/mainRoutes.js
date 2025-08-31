@@ -115,6 +115,9 @@ router.use('/invitations', invitationRoutes);
 const transactionRoutes = require('../routes/transactionRoutes.js');
 router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
 
+const mapsRoutes = require('../routes/mapsRoutes.js');
+router.use('/maps', mapsRoutes);
+
 //////////////////////////////////////////////////////
 // EXPORT ROUTER
 //////////////////////////////////////////////////////
