@@ -109,6 +109,9 @@ router.post("/logout", (req, res) => {
 const circleRoutes = require('../routes/circleRoutes.js'); 
 router.use('/circles', circleRoutes); 
 
+// User search (used by frontend autocomplete when inviting by username)
+router.get('/users/search', jwtMiddleware.verifyAccessToken, userController.searchUsers);
+
 const invitationRoutes = require('../routes/invitationRoutes.js');
 router.use('/invitations', invitationRoutes);
 

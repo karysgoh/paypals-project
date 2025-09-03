@@ -278,6 +278,47 @@ module.exports = {
         }
     },
 
+    // Search users by username or email for autocomplete/invite
+    searchUsers: async (query) => {
+        try {
+            const q = String(query).trim();
+            const users = await prisma.user.findMany({
+                where: {
+                    OR: [
+                        { username: { contains: q, mode: 'insensitive' } },
+                        { email: { contains: q, mode: 'insensitive' } }
+                    ]
+                },
+                select: {
+                    id: true,
+                    username: true,
+                    email: true
+                },
+                take: 10
+            });
+            return users;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // Link pending invitations that were sent to an email to the newly created user
+    linkInvitationsToUser: async (userId, email) => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // Only link pending invitations where invitee_id is currently null
+                const updated = await tx.invitation.updateMany({
+                    where: { email: email, invitee_id: null, status: 'pending' },
+                    data: { invitee_id: parseInt(userId, 10) }
+                });
+                return updated.count ?? updated;
+            });
+            return result;
+        } catch (error) {
+            throw error;
+        }
+    },
+
     updateUserEmailVerification: async (userId, isVerified) => {
         try {
             const result = await prisma.$transaction(async (tx) => {

@@ -62,6 +62,16 @@ module.exports = {
       user_id: results.id
     });
 
+    // Link any pending invitations that were sent to this email to the newly created user
+    try {
+      const linked = await userModel.linkInvitationsToUser(results.id, email);
+      if (linked && linked > 0) {
+        logger.info(`Linked ${linked} pending invitations to new user ${results.id}`);
+      }
+    } catch (linkErr) {
+      logger.error(`Failed to link invitations to new user ${results.id}: ${linkErr.message}`);
+    }
+
     // Send verification email
     try {
       await sendVerificationEmail(email, verificationToken, username);
@@ -268,5 +278,28 @@ module.exports = {
         }
       }
     });
+  })
+,
+
+  // Search users by query (username or email) for autocomplete when inviting
+  searchUsers: catchAsync(async (req, res, next) => {
+    const q = req.query.q;
+    if (!q || String(q).trim() === '') {
+      return res.status(200).json({ status: 'success', data: [] });
+    }
+    const results = await userModel.searchUsers(q);
+    // Normalize: ensure each result has a visible username (fallback to email or id)
+    const mapped = (results || []).map(u => ({
+      id: u.id,
+      username: u.username || u.email || `user-${u.id}`,
+      email: u.email || null,
+    }));
+    // Debug: log search query and mapped results (helps diagnose missing username)
+    try {
+      logger.debug && logger.debug(`userController.searchUsers q=${q} mapped=${JSON.stringify(mapped)}`);
+    } catch (err) {
+      console.debug(`searchUsers debug: ${q}`, mapped);
+    }
+    res.status(200).json({ status: 'success', data: mapped });
   })
 };

@@ -148,14 +148,39 @@ module.exports = {
                 }
 
                 // 3) Add user to circle
-                const newMember = await tx.circleMember.create({
-                    data: {
-                        circle_id: invitation.circle_id,
-                        user_id: userId,
-                        role: 'member',
-                        status: 'active'
+                // Use createMany with skipDuplicates to avoid unique constraint errors in concurrent scenarios.
+                // createMany does not return the created record, so fetch it after.
+                // createMany expects an array for `data`
+                console.debug(`acceptInvitation: attempting upsert circleMember for circle=${invitation.circle_id} user=${userId}`);
+                // upsert will either create the member or update existing one and return the record
+                let newMember;
+                try {
+                    newMember = await tx.circleMember.upsert({
+                        where: { circle_id_user_id: { circle_id: invitation.circle_id, user_id: userId } },
+                        update: { status: 'active', role: 'member' },
+                        create: {
+                            circle_id: invitation.circle_id,
+                            user_id: userId,
+                            role: 'member',
+                            status: 'active'
+                        }
+                    });
+                    console.debug('acceptInvitation: upsert result:', newMember);
+                } catch (upsertErr) {
+                    console.error('acceptInvitation: upsert error:', upsertErr);
+                    // Fallback diagnostics: try to read any existing record
+                    try {
+                        const found = await tx.circleMember.findMany({
+                            where: { circle_id: invitation.circle_id, user_id: userId }
+                        });
+                        console.error('acceptInvitation: findMany returned (fallback):', found);
+                        const count = await tx.circleMember.count({ where: { circle_id: invitation.circle_id, user_id: userId } });
+                        console.error('acceptInvitation: count returned (fallback):', count);
+                    } catch (innerErr) {
+                        console.error('acceptInvitation: error while performing fallback diagnostics:', innerErr);
                     }
-                });
+                    throw new Error('Failed to add user to circle');
+                }
 
                 // 4) Update invitation status
                 await tx.invitation.update({
