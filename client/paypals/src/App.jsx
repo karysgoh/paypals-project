@@ -12,6 +12,7 @@ import CircleDetail from "./pages/CircleDetail";
 import LandingPage from "./pages/LandingPage";
 import NavBar from "./components/NavBar";
 import VerifyEmail from "./pages/VerifyEmail";
+import Tutorial from "./pages/Tutorial";
 
 // ProtectedRoute component to handle authentication checks
 const ProtectedRoute = () => {
@@ -29,6 +30,7 @@ const MainLayout = () => (
   <div>
     <NavBar />
     <Outlet />
+  <Tutorial />
   </div>
 );
 
@@ -39,6 +41,7 @@ function App() {
         <Routes>
           <Route element={<MainLayout />}>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/tutorial" element={<></>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />

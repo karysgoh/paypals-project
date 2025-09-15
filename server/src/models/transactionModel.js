@@ -41,9 +41,7 @@ module.exports = {
                     throw new Error('Circle not found');
                 }
 
-                // Normalize created_by to number in case it's a string coming from the client
-                const createdById = Number(data.created_by);
-                const isMember = circle.members.some(m => m.user_id === createdById);
+                const isMember = circle.members.some(m => m.user_id === data.created_by);
                 if (!isMember) {
                     throw new Error('Access denied: User is not a member of the circle');
                 }
@@ -65,14 +63,8 @@ module.exports = {
                     throw new Error('At least one participant is required');
                 }
 
-                // Normalize participant IDs and amounts (clients may send strings)
-                let finalParticipants = [...data.participants].map(p => ({
-                    ...p,
-                    user_id: Number(p.user_id),
-                    amount_owed: Number(p.amount_owed)
-                }));
-
-                if (!finalParticipants.some(p => p.user_id === createdById)) {
+                let finalParticipants = [...data.participants];
+                if (!finalParticipants.some(p => p.user_id === data.created_by)) {
                     // Calculate creator's amount owed based on total and other participants
                     const otherParticipantsTotal = finalParticipants.reduce((sum, p) => sum + p.amount_owed, 0);
                     const creatorAmountOwed = data.total_amount - otherParticipantsTotal;
@@ -83,7 +75,7 @@ module.exports = {
                     
                     // Auto-add creator to participants with calculated amount owed
                     finalParticipants.push({
-                        user_id: createdById,
+                        user_id: data.created_by,
                         amount_owed: creatorAmountOwed,
                         payment_status: creatorAmountOwed > 0 ? 'pending' : 'paid'
                     });
@@ -107,21 +99,11 @@ module.exports = {
                 }
 
                 // Validate that all participants are members of the circle
-                const participantIds = finalParticipants.map(p => Number(p.user_id));
-                const circleMemberIds = circle.members.map(m => Number(m.user_id));
+                const participantIds = finalParticipants.map(p => p.user_id);
+                const circleMemberIds = circle.members.map(m => m.user_id);
                 
                 const invalidParticipants = participantIds.filter(id => !circleMemberIds.includes(id));
                 if (invalidParticipants.length > 0) {
-                    // Debug logging to aid diagnosis of membership mismatch
-                    console.error('Membership validation failed when creating transaction', {
-                        circleId,
-                        created_by: data.created_by,
-                        circleMemberIds,
-                        participantIds,
-                        invalidParticipants,
-                        finalParticipantsPreview: finalParticipants.slice(0, 10)
-                    });
-
                     // Log security violation attempt
                     await tx.auditLog.create({
                         data: {
@@ -139,8 +121,8 @@ module.exports = {
 
                 const participantsData = finalParticipants.map(p => ({
                     transaction_id: transaction.id,
-                    user_id: Number(p.user_id),
-                    amount_owed: Number(p.amount_owed),
+                    user_id: p.user_id,
+                    amount_owed: p.amount_owed,
                     payment_status: p.payment_status || 'pending'
                 }));
 
@@ -242,15 +224,8 @@ module.exports = {
                 // Handle participants update if provided
                 if (data.participants && Array.isArray(data.participants)) {
                     // Validate all participants are circle members
-                    // Normalize incoming participant IDs and amounts
-                    const incomingParticipants = data.participants.map(p => ({
-                        ...p,
-                        user_id: Number(p.user_id),
-                        amount_owed: Number(p.amount_owed)
-                    }));
-
-                    const participantIds = incomingParticipants.map(p => p.user_id);
-                    const circleMemberIds = existingTransaction.circle.members.map(m => Number(m.user_id));
+                    const participantIds = data.participants.map(p => p.user_id);
+                    const circleMemberIds = existingTransaction.circle.members.map(m => m.user_id);
                     
                     const invalidParticipants = participantIds.filter(id => !circleMemberIds.includes(id));
                     if (invalidParticipants.length > 0) {
@@ -263,11 +238,11 @@ module.exports = {
                     });
 
                     // Handle creator inclusion logic (same as create)
-                    let finalParticipants = [...incomingParticipants];
-                    const totalAmount = data.total_amount !== undefined ? Number(data.total_amount) : existingTransaction.total_amount;
+                    let finalParticipants = [...data.participants];
+                    const totalAmount = data.total_amount || existingTransaction.total_amount;
 
                     if (!finalParticipants.some(p => p.user_id === existingTransaction.created_by)) {
-                        const otherParticipantsTotal = finalParticipants.reduce((sum, p) => sum + Number(p.amount_owed), 0);
+                        const otherParticipantsTotal = finalParticipants.reduce((sum, p) => sum + p.amount_owed, 0);
                         const creatorAmountOwed = totalAmount - otherParticipantsTotal;
             
                         if (creatorAmountOwed < 0) {
@@ -275,12 +250,12 @@ module.exports = {
                         }
                         
                         finalParticipants.push({
-                            user_id: Number(existingTransaction.created_by),
+                            user_id: existingTransaction.created_by,
                             amount_owed: creatorAmountOwed,
                             payment_status: creatorAmountOwed > 0 ? 'pending' : 'paid'
                         });
                     } else {
-                        const totalParticipantAmounts = finalParticipants.reduce((sum, p) => sum + Number(p.amount_owed), 0);
+                        const totalParticipantAmounts = finalParticipants.reduce((sum, p) => sum + p.amount_owed, 0);
                         if (Math.abs(totalParticipantAmounts - totalAmount) > 0.01) { 
                             throw new Error(`Total amount (${totalAmount}) does not match sum of participant amounts (${totalParticipantAmounts})`);
                         }
@@ -289,8 +264,8 @@ module.exports = {
                     // Create new participants
                     const participantsData = finalParticipants.map(p => ({
                         transaction_id: transactionId,
-                        user_id: Number(p.user_id),
-                        amount_owed: Number(p.amount_owed),
+                        user_id: p.user_id,
+                        amount_owed: p.amount_owed,
                         payment_status: p.payment_status || 'pending'
                     }));
 

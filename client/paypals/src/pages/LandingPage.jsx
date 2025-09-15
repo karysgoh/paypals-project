@@ -68,6 +68,7 @@ const StepCard = ({ number, title, description }) => (
 
 function LandingPage() {
   const { handleLogin, handleRegister, loading, currentUser } = useAuth();
+  const navigate = useNavigate();
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
@@ -85,11 +86,11 @@ function LandingPage() {
             No more awkward money conversations or forgotten IOUs.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button variant="primary" size="lg" onClick={() => useNavigate('/register')}>
+            <Button aria-label="start-splitting" variant="primary" size="lg" onClick={() => navigate('/register')}>
               Start Splitting
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-            <Button variant="outline" size="lg">
+            <Button variant="outline" size="lg" onClick={() => navigate('/tutorial')}>
               See How It Works
             </Button>
           </div>
@@ -153,11 +154,6 @@ function LandingPage() {
               description="Split expenses on the go. Our web app works perfectly on any device, anytime, anywhere."
             />
             <FeatureCard
-              icon={Globe}
-              title="Multiple Currencies"
-              description="Traveling abroad? No problem. Handle multiple currencies and convert amounts automatically."
-            />
-            <FeatureCard
               icon={CheckCircle}
               title="Settlement Tracking"
               description="See who owes what at a glance. Mark payments as complete when friends pay you back."
@@ -198,26 +194,6 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-8 sm:py-16 bg-slate-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-slate-900 mb-2">50K+</div>
-              <div className="text-slate-600">Expenses Split</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-slate-900 mb-2">10K+</div>
-              <div className="text-slate-600">Happy Users</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-slate-900 mb-2">$2M+</div>
-              <div className="text-slate-600">Money Organized</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-12 sm:py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
@@ -229,11 +205,11 @@ function LandingPage() {
             Start tracking and splitting costs with your friends today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button variant="primary" size="lg" onClick={() => useNavigate('/register')}>
+            <Button aria-label="start-splitting" variant="primary" size="lg" onClick={() => navigate('/register')}>
               Get Started Free
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-            <Button variant="outline" size="lg">
+            <Button variant="outline" size="lg" onClick={() => navigate('/tutorial')}>
               View Demo
             </Button>
           </div>
@@ -258,7 +234,7 @@ function LandingPage() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-slate-200 text-center text-sm text-slate-500">
-            © 2024 PayPals. All rights reserved.
+            © 2025 PayPals. All rights reserved.
           </div>
         </div>
       </footer>

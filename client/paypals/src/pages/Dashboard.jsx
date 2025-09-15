@@ -10,8 +10,6 @@ import {
   Clock3,
   MoreHorizontal
 } from "lucide-react";
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, ...props }) => {
   const baseClasses = "inline-flex items-center justify-center rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
@@ -83,14 +81,10 @@ const api = {
     };
     try {
       const response = await fetch(url, config);
-      // Try to parse JSON body (may include server message)
-      let json;
-      try { json = await response.json(); } catch (e) { json = null; }
       if (!response.ok) {
-        const msg = (json && (json.message || json.error)) || `HTTP error! status: ${response.status}`;
-        throw new Error(msg);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return json;
+      return await response.json();
     } catch (error) {
       console.error(`API request failed for ${endpoint}:`, error);
       throw error;
@@ -119,7 +113,6 @@ export default function Dashboard() {
   const [circles, setCircles] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [balances, setBalances] = useState({ owedTo: 0, owes: 0, net: 0 });
-  const [invitations, setInvitations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -162,19 +155,6 @@ export default function Dashboard() {
       });
       setCircles(userCircles.data || []);
 
-      // load invitations
-      try {
-        const invRes = await api.request('/invitations/my');
-        // API returns { invitations, total, totalPages, ... } inside data
-        const allInv = (invRes.data && invRes.data.invitations) || [];
-        // Only show pending invitations in the dashboard
-        const pending = allInv.filter(inv => inv && inv.status === 'pending');
-        setInvitations(pending);
-      } catch (err) {
-        console.warn('Failed to load invitations', err);
-        setInvitations([]);
-      }
-
       const transactionResponse = await api.getUserTransactions().catch(err => {
         console.warn('Failed to load transactions:', err);
         return { data: { transactions: [] } };
@@ -205,30 +185,6 @@ export default function Dashboard() {
 
   const handleRetry = () => {
     loadDashboardData();
-  };
-
-  const acceptInvitation = async (invId) => {
-    try {
-      await api.request(`/invitations/${invId}/accept`, { method: 'POST' });
-      setInvitations(prev => prev.filter(i => i.id !== invId));
-      const userCircles = await api.getUserCircles();
-      setCircles(userCircles.data || []);
-  toast.success('You have successfully joined the circle');
-    } catch (err) {
-      console.error('Failed to accept invitation', err);
-  toast.error('Failed to accept invitation');
-    }
-  };
-
-  const rejectInvitation = async (invId) => {
-    try {
-      await api.request(`/invitations/${invId}/reject`, { method: 'POST' });
-      setInvitations(prev => prev.filter(i => i.id !== invId));
-  toast.success('Invitation rejected');
-    } catch (err) {
-      console.error('Failed to reject invitation', err);
-  toast.error('Failed to reject invitation');
-    }
   };
 
   const userName = currentUser?.name || currentUser?.username || currentUser?.email?.split('@')[0] || 'there';
@@ -301,7 +257,7 @@ export default function Dashboard() {
           </div>
 
           {/* Balance Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12" data-tour="balance-card">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -412,35 +368,6 @@ export default function Dashboard() {
                   )}
                 </CardContent>
               </Card>
-              {/* Invitations Panel */}
-              <div className="mt-6">
-                <div className="mb-3">
-                  <h3 className="text-xl font-semibold text-slate-900">Invitations</h3>
-                  <p className="text-base text-slate-500">Pending invites to join circles</p>
-                </div>
-                <Card>
-                  <CardContent className="p-0">
-                    {invitations.length === 0 ? (
-                      <div className="p-6 text-center text-base text-slate-500">No pending invitations</div>
-                    ) : (
-                      <div className="divide-y divide-slate-100">
-                        {invitations.map(inv => (
-                          <div key={inv.id} className="flex items-center justify-between p-4">
-                            <div>
-                              <div className="text-base font-medium text-slate-900">{inv.circle?.name || 'Circle'}</div>
-                              <div className="text-sm text-slate-500">Invited by {inv.inviter?.username || inv.inviter?.name || 'someone'}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => rejectInvitation(inv.id)}>Reject</Button>
-                              <Button size="sm" variant="primary" onClick={() => acceptInvitation(inv.id)}>Accept</Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
             </div>
 
             {/* My Circles */}
@@ -509,7 +436,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      <ToastContainer position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
     </div>
   );
 }

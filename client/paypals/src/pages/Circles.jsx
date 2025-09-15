@@ -187,6 +187,7 @@ export default function Circles() {
             onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-2"
             size="md"
+            data-tour="create-circle"
           >
             <Plus className="w-4 h-4" />
             Create Circle

@@ -44,11 +44,6 @@ export default function CircleDetail() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
-  const [inviteQuery, setInviteQuery] = useState('');
-  const [inviteResults, setInviteResults] = useState([]);
-  const [selectedInviteUser, setSelectedInviteUser] = useState(null);
-  const [inviteSearching, setInviteSearching] = useState(false);
-  const inviteDebounceRef = useRef(null);
   const [showCreateCircle, setShowCreateCircle] = useState(false);
   const [showUpdateCircle, setShowUpdateCircle] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -313,17 +308,16 @@ export default function CircleDetail() {
 
   useEffect(() => {
     if (circle && circle.members) {
-      // Keep amounts as strings so inputs can be cleared/backspaced by the user
-      const defaultParticipants = (circle.members || []).map(m => ({
-        user_id: m.user_id || m.id,
-        username: m.user?.username || m.username || m.name || m.email || String(m.user_id || m.id),
-        amount_owed: '',
-        include: true,
-        user: m.user || { id: m.user_id, username: m.user?.username || 'Unknown' }
-      }));
-      setTxForm(f => ({ ...f, participants: defaultParticipants }));
+        const defaultParticipants = (circle.members || []).map(m => ({
+            user_id: m.user_id || m.id,
+            username: m.user?.username || m.username || m.name || m.email || String(m.user_id || m.id),
+            amount_owed: 0,
+            include: true,
+            user: m.user || { id: m.user_id, username: m.user?.username || 'Unknown' }
+        }));
+        setTxForm(f => ({ ...f, participants: defaultParticipants }));
     }
-  }, [circle]);
+    }, [circle]);
 
   const circleCentroid = useMemo(() => {
     if (!circle || !circle.members) return null;
@@ -339,7 +333,7 @@ export default function CircleDetail() {
   }, [circle]);
 
   const updateParticipantInclude = (user_id, include) => {
-  if (currentUser && String(user_id) === String(currentUser.user_id)) return;
+    if (currentUser && user_id === currentUser.id) return;
     setTxForm(f => ({
       ...f,
       participants: f.participants.map(p => p.user_id === user_id ? { ...p, include } : p),
@@ -347,10 +341,9 @@ export default function CircleDetail() {
   };
 
   const updateParticipantAmount = (user_id, amount) => {
-    // Keep raw input string to allow clearing/backspace; parse at validation/submission
     setTxForm(f => ({
       ...f,
-      participants: f.participants.map(p => p.user_id === user_id ? { ...p, amount_owed: amount } : p),
+      participants: f.participants.map(p => p.user_id === user_id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p),
     }));
   };
 
@@ -365,7 +358,7 @@ export default function CircleDetail() {
     if (included.length === 0) return setTxError('Select at least one participant');
 
     if (currentUser) {
-      const creatorIncluded = included.some(p => String(p.user_id) === String(currentUser.user_id));
+      const creatorIncluded = included.some(p => p.user_id === currentUser.id);
       if (!creatorIncluded) return setTxError('Transaction creator must be included as a participant');
     }
 
@@ -376,13 +369,12 @@ export default function CircleDetail() {
       included.forEach((p, idx) => {
         const amount = idx === included.length - 1 ? parseFloat((total - running).toFixed(2)) : share;
         running += amount;
-        participantsPayload.push({ user_id: String(p.user_id), amount_owed: amount });
+        participantsPayload.push({ user_id: p.user_id, amount_owed: amount });
       });
     } else {
-      // Sum participant amounts using numeric parsing (empty strings count as 0)
-      const sum = included.reduce((s, p) => s + (parseFloat(p.amount_owed) || 0), 0);
+      const sum = included.reduce((s, p) => s + (p.amount_owed || 0), 0);
       if (Math.abs(sum - total) > 0.01) return setTxError('Sum of participant amounts must equal total amount');
-      participantsPayload = included.map(p => ({ user_id: String(p.user_id), amount_owed: parseFloat(p.amount_owed) || 0 }));
+      participantsPayload = included.map(p => ({ user_id: p.user_id, amount_owed: p.amount_owed }));
     }
 
     const payload = {
@@ -417,7 +409,7 @@ export default function CircleDetail() {
         description: '',
         total_amount: '',
         splitEven: true,
-        participants: txForm.participants.map(p => ({ ...p, amount_owed: '', include: true })),
+        participants: txForm.participants.map(p => ({ ...p, amount_owed: 0, include: true })),
         place_id: '',
         location_lat: '',
         location_lng: '',
@@ -536,123 +528,56 @@ export default function CircleDetail() {
           </div>
         )}
 
-        <div className="flex flex-col gap-6">
-          <div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
             <Card className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-slate-900">Members</h2>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2">
                   {isAdmin && (
-                    <div className="w-full sm:w-auto">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Search username or enter email to invite"
-                          value={inviteQuery}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setInviteQuery(v);
-                            setInviteEmail(v);
-                            setSelectedInviteUser(null);
-                            setInviteError('');
-                            // debounce search
-                            if (inviteDebounceRef.current) clearTimeout(inviteDebounceRef.current);
-                            if (!v || v.trim() === '') {
-                              setInviteResults([]);
-                              return;
-                            }
-                            inviteDebounceRef.current = setTimeout(async () => {
-                              setInviteSearching(true);
-                              try {
-                                const res = await fetch(`${apiBase}/users/search?q=${encodeURIComponent(v)}`, {
-                                  credentials: 'include',
-                                  headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-                                });
-                                const json = await res.json();
-                                if (res.ok && Array.isArray(json.data)) {
-                                  setInviteResults(json.data || []);
-                                  console.debug('invite search results', json.data || []);
-                                } else {
-                                  setInviteResults([]);
-                                }
-                              } catch (err) {
-                                setInviteResults([]);
-                              } finally {
-                                setInviteSearching(false);
-                              }
-                            }, 300);
-                          }}
-                          className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
-                        />
-                        {inviteResults.length > 0 && (
-                          <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-sm z-50 max-h-40 overflow-auto">
-                            {inviteResults.map(u => (
-                              <div
-                                key={u.id}
-                                className="px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm"
-                                onClick={() => {
-                                  setSelectedInviteUser(u);
-                                  setInviteQuery(u.username);
-                                  setInviteEmail(u.email || '');
-                                  setInviteResults([]);
-                                }}
-                              >
-                                <div className="font-medium">{u.username}</div>
-                                <div className="text-xs text-slate-500">{u.email}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={async () => {
-                            // If a user was selected, invite by id; otherwise fallback to email
-                            setInviteError('');
-                            setInviteSuccess('');
-                            if (!selectedCircleId) return setInviteError('No circle selected');
-                            if (!selectedInviteUser && (!inviteEmail || inviteEmail.indexOf('@') === -1)) {
-                              setInviteError('Select a user or enter a valid email');
-                              return;
-                            }
-                            setInviteLoading(true);
-                            try {
-                              const body = selectedInviteUser ? { inviteeId: selectedInviteUser.id } : { email: inviteEmail };
-                              const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-                                },
-                                body: JSON.stringify(body),
-                              });
-                              const json = await res.json().catch(() => null);
-                              if (!res.ok) throw new Error((json && (json.message || json.error)) || 'Failed to send invitation');
-                              setInviteSuccess('Invitation sent');
-                              // optionally show toast if react-toastify is available
-                              try { if (window && window.toast) window.toast.success && window.toast.success('Invitation sent'); } catch(e){}
-                              setInviteQuery('');
-                              setInviteEmail('');
-                              setSelectedInviteUser(null);
-                              setInviteResults([]);
-                              setTimeout(() => setInviteSuccess(''), 3000);
-                            } catch (err) {
-                              setInviteError(err.message || String(err));
-                            } finally {
-                              setInviteLoading(false);
-                            }
-                          }}
-                          className="w-full sm:w-auto"
-                        >
-                          {inviteLoading ? 'Sending...' : 'Invite'}
-                        </Button>
-                        {selectedInviteUser && (
-                          <div className="text-sm text-slate-600">Selected: <span className="font-medium">{selectedInviteUser.username}</span></div>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        placeholder="Invitee email"
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={async () => {
+                          if (!inviteEmail || inviteEmail.indexOf('@') === -1) {
+                            setInviteError('Enter a valid email');
+                            return;
+                          }
+                          setInviteError('');
+                          setInviteSuccess('');
+                          setInviteLoading(true);
+                          try {
+                            const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
+                              method: 'POST',
+                              credentials: 'include',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+                              },
+                              body: JSON.stringify({ email: inviteEmail }),
+                            });
+                            const json = await res.json();
+                            if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
+                            setInviteSuccess('Invitation sent');
+                            setInviteEmail('');
+                            setTimeout(() => setInviteSuccess(''), 3000);
+                          } catch (err) {
+                            setInviteError(err.message);
+                          } finally {
+                            setInviteLoading(false);
+                          }
+                        }}
+                      >
+                        {inviteLoading ? 'Sending...' : 'Invite'}
+                      </Button>
                     </div>
                   )}
                   {selectedCircleId && (
@@ -688,48 +613,44 @@ export default function CircleDetail() {
               ) : (
                 <>
                   <div className="space-y-3">
-                      {(circle?.members || []).length === 0 ? (
-                        <p className="text-sm text-slate-600">No members found</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {(circle.members || []).map(m => (
-                            <div key={m.user_id || m.id} className="p-3 bg-white rounded-md shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 w-full sm:w-auto">
-                                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-sm">
-                                  {(m.user?.username || m.username || m.name || '?').slice(0, 1).toUpperCase()}
-                                </div>
-                                <div>
-                                  <div className="text-base sm:text-lg font-semibold text-slate-900 leading-tight">
-                                    {m.user?.username || m.username || m.name || m.email}
-                                    <span className="ml-2 text-sm text-slate-500">({m.role})</span>
-                                  </div>
-                                  <div className="text-sm text-slate-500">{m.user?.email || m.email || ''}</div>
-                                </div>
-                              </div>
-                              {isAdmin && m.user_id !== currentUser.user_id && (
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3 sm:mt-0 w-full sm:w-auto">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setShowUpdateRole({ memberId: m.user_id, currentRole: m.role })}
-                                    className="w-full sm:w-auto"
-                                  >
-                                    <UserPlus className="w-4 h-4 mr-1" /> Role
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={() => setShowRemoveMember(m.user_id)}
-                                    className="w-full sm:w-auto"
-                                  >
-                                    <UserMinus className="w-4 h-4 mr-1" /> Remove
-                                  </Button>
-                                </div>
-                              )}
+                    {(circle?.members || []).length === 0 ? (
+                      <p className="text-sm text-slate-600">No members found</p>
+                    ) : (
+                      (circle.members || []).map(m => (
+                        <div key={m.user_id || m.id} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-sm">
+                              {(m.user?.username || m.username || m.name || '?').slice(0, 1).toUpperCase()}
                             </div>
-                          ))}
+                            <div>
+                              <div className="text-sm font-medium text-slate-900">
+                                {m.user?.username || m.username || m.name || m.email}
+                                <span className="ml-2 text-xs text-slate-500">({m.role})</span>
+                              </div>
+                              <div className="text-xs text-slate-500">{m.user?.email || m.email || ''}</div>
+                            </div>
+                          </div>
+                          {isAdmin && m.user_id !== currentUser.user_id && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setShowUpdateRole({ memberId: m.user_id, currentRole: m.role })}
+                              >
+                                <UserPlus className="w-4 h-4 mr-1" /> Role
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => setShowRemoveMember(m.user_id)}
+                              >
+                                <UserMinus className="w-4 h-4 mr-1" /> Remove
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ))
+                    )}
                   </div>
                   {inviteError && <div className="mt-2 text-sm text-red-600">{inviteError}</div>}
                   {inviteSuccess && <div className="mt-2 text-sm text-green-600">{inviteSuccess}</div>}
@@ -748,7 +669,7 @@ export default function CircleDetail() {
             </Card>
           </div>
 
-          <div>
+          <div className="lg:col-span-2">
             <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
@@ -757,14 +678,14 @@ export default function CircleDetail() {
               <div className="flex items-center gap-2">
                 <label className="text-sm text-slate-600 mr-2">Show only my transactions</label>
                 <input type="checkbox" checked={filterMine} onChange={() => setFilterMine(f => !f)} />
-                <Button variant="primary" className="ml-3" onClick={() => setShowCreate(true)}>
+                <Button variant="primary" className="ml-3" data-tour="create-transaction" onClick={() => setShowCreate(true)}>
                   Create Transaction
                 </Button>
               </div>
             </div>
 
-            <Card className="p-4">
-              <div>
+            <Card>
+              <div className="p-4">
                 {loading ? (
                   <div className="space-y-4">
                     <div className="h-12 bg-slate-100 rounded"></div>
@@ -779,23 +700,23 @@ export default function CircleDetail() {
                     <p className="text-sm">Create the first transaction for this circle</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="divide-y divide-slate-100">
                     {visibleTransactions.map(tx => (
-                      <div key={tx.id} className="p-4 bg-white rounded-md shadow-sm">
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="text-base sm:text-lg font-semibold text-slate-900 leading-tight">{tx.description || tx.name || 'Transaction'}</div>
-                            <div className="text-sm text-slate-500 mt-1">{new Date(tx.created_at).toLocaleString()}</div>
-                            <div className="text-sm text-slate-500 mt-1">Participants: {(tx.members || []).length}</div>
+                      <div key={tx.id} className="py-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-slate-900">{tx.description || tx.name || 'Transaction'}</div>
+                            <div className="text-xs text-slate-500">{new Date(tx.created_at).toLocaleString()}</div>
+                            <div className="text-xs text-slate-500">Participants: {(tx.members || []).length}</div>
                           </div>
-                          <div className="text-right mt-2 sm:mt-0">
-                            <div className="text-lg sm:text-xl font-bold text-slate-900">${(parseFloat(tx.total_amount || tx.amount || 0) || 0).toFixed(2)}</div>
-                            {tx.is_user_participant && <div className="text-sm text-green-600">Involving you</div>}
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-slate-900">${(parseFloat(tx.total_amount || tx.amount || 0) || 0).toFixed(2)}</div>
+                            {tx.is_user_participant && <div className="text-xs text-green-600">Involving you</div>}
                           </div>
                         </div>
                         {(tx.members || []).length > 0 && (
-                          <div className="mt-4">
-                            <div className="text-sm text-slate-600 mb-2">Breakdown</div>
+                          <div className="mt-3">
+                            <div className="text-xs text-slate-600 mb-2">Breakdown:</div>
                             <div className="flex flex-wrap gap-2">
                               {(tx.members || []).map((m, idx) => {
                                 const memberName =
@@ -808,7 +729,7 @@ export default function CircleDetail() {
                                 const amt = parseFloat(m.amount_owed ?? m.amount_paid ?? m.amount ?? 0) || 0;
                                 const key = `${tx.id}-${m.user_id || m.id || idx}`;
                                 return (
-                                  <div key={key} className="px-3 py-1 bg-slate-100 rounded text-sm text-slate-700">
+                                  <div key={key} className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-700">
                                     <span className="font-medium">{memberName}</span>
                                     <span className="ml-2 text-slate-900">${amt.toFixed(2)}</span>
                                   </div>
@@ -826,8 +747,8 @@ export default function CircleDetail() {
 
             {/* Create Circle Modal */}
             {showCreateCircle && (
-                <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                   <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-slate-900">Create New Circle</h3>
                     <button onClick={() => setShowCreateCircle(false)} className="text-slate-400 hover:text-slate-600">
@@ -883,8 +804,8 @@ export default function CircleDetail() {
 
             {/* Update Circle Modal */}
             {showUpdateCircle && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-6">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
                   <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-slate-900">Update Circle</h3>
                     <button 
@@ -959,8 +880,8 @@ export default function CircleDetail() {
 
             {/* Delete Circle Confirmation */}
             {showDeleteConfirm && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                   <div className="border-b border-slate-200 px-6 py-4">
                     <h3 className="text-xl font-semibold text-slate-900">Delete Circle</h3>
                   </div>
@@ -993,8 +914,8 @@ export default function CircleDetail() {
 
             {/* Leave Circle Confirmation */}
             {showLeaveConfirm && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                   <div className="border-b border-slate-200 px-6 py-4">
                     <h3 className="text-xl font-semibold text-slate-900">Leave Circle</h3>
                   </div>
@@ -1027,8 +948,8 @@ export default function CircleDetail() {
 
             {/* Remove Member Confirmation */}
             {showRemoveMember && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                   <div className="border-b border-slate-200 px-6 py-4">
                     <h3 className="text-xl font-semibold text-slate-900">Remove Member</h3>
                   </div>
@@ -1061,8 +982,8 @@ export default function CircleDetail() {
 
             {/* Update Member Role Modal */}
             {showUpdateRole && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                   <div className="border-b border-slate-200 px-6 py-4">
                     <h3 className="text-xl font-semibold text-slate-900">Update Member Role</h3>
                   </div>
@@ -1103,19 +1024,24 @@ export default function CircleDetail() {
 
             {/* Create Transaction Modal */}
             {showCreate && (
-              <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-20">
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-slate-900">Create Transaction</h3>
                     <button onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-slate-600">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
                   <div className="p-6">
-                    <form onSubmit={handleCreateTransaction} className="space-y-6 pb-28">
+                    <form onSubmit={handleCreateTransaction} className="space-y-6">
                       {successMessage && (
                         <div className="px-4 py-3 bg-green-50 border border-green-200 text-green-800 rounded-md text-sm">
                           {successMessage}
+                        </div>
+                      )}
+                      {txError && (
+                        <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
+                          {txError}
                         </div>
                       )}
                       <div className="space-y-4">
@@ -1144,10 +1070,10 @@ export default function CircleDetail() {
                           <div className="relative">
                             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
                             <input
-                              type="text"
-                              inputMode="decimal"
-                              pattern="^\d+(\.\d{1,2})?$"
-                              value={txForm.total_amount ?? ''}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={txForm.total_amount}
                               onChange={e => setTxForm(f => ({ ...f, total_amount: e.target.value }))}
                               className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
                               placeholder="0.00"
@@ -1217,12 +1143,7 @@ export default function CircleDetail() {
                                     className={`p-3 cursor-pointer rounded-md transition-colors ${
                                       isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-50 border border-transparent'
                                     }`}
-                                    onClick={() => {
-                                      setSelectedPlace(p);
-                                      // Close the place search list and clear query
-                                      setPlaceSearchResults([]);
-                                      setSearchQuery('');
-                                    }}
+                                    onClick={() => setSelectedPlace(p)}
                                   >
                                     <div className="flex items-start justify-between">
                                       <div className="flex-1">
@@ -1286,12 +1207,9 @@ export default function CircleDetail() {
                         <div className="text-xs text-slate-600">The creator of the transaction must be included and cannot be removed.</div>
                         <div className="space-y-3 max-h-60 overflow-auto border border-slate-200 rounded-md p-4 bg-slate-50">
                           {txForm.participants.map(p => {
-                            const isCreator = currentUser && (
-                                String(p.user_id) === String(currentUser.user_id) || 
-                                String(p.user?.id) === String(currentUser.user_id)
-                            );
+                            const isCreator = currentUser && p.user_id === currentUser.user_id;
                             return (
-                              <div key={p.user_id} className="flex flex-col sm:flex-row items-center sm:items-start gap-3 p-3 bg-white rounded-md border border-slate-200">
+                              <div key={p.user_id} className="flex items-center gap-4 p-3 bg-white rounded-md border border-slate-200">
                                 <input
                                   type="checkbox"
                                   checked={p.include}
@@ -1313,7 +1231,7 @@ export default function CircleDetail() {
                                       min="0"
                                       value={p.amount_owed}
                                       onChange={e => updateParticipantAmount(p.user_id, e.target.value)}
-                                      className="w-full sm:w-20 px-2 py-1 border border-slate-300 rounded text-sm bg-white text-slate-900"
+                                      className="w-20 px-2 py-1 border border-slate-300 rounded text-sm bg-white text-slate-900"
                                       placeholder="0.00"
                                     />
                                   </div>
@@ -1328,12 +1246,7 @@ export default function CircleDetail() {
                           </div>
                         )}
                       </div>
-                      <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4 z-30">
-                        {txError && (
-                          <div className="mb-3 px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
-                            {txError}
-                          </div>
-                        )}
+                      <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4">
                         <div className="flex items-center justify-end gap-3">
                           <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
                             Cancel
