@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus } from "lucide-react";
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -33,8 +33,9 @@ const Card = ({ children, className = "", ...props }) => (
 export default function CircleDetail() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { id } = useParams();
   const [circles, setCircles] = useState([]);
-  const [selectedCircleId, setSelectedCircleId] = useState(null);
+  const [selectedCircleId, setSelectedCircleId] = useState(id);
   const [circle, setCircle] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,13 +95,14 @@ export default function CircleDetail() {
       }
       const json = await res.json();
       setCircles(json.data || []);
-      if (!selectedCircleId && (json.data || []).length > 0) {
-        setSelectedCircleId((json.data || [])[0].id);
+      // If no circle ID in URL and we have circles, redirect to first circle
+      if (!id && (json.data || []).length > 0) {
+        navigate(`/circles/${(json.data || [])[0].id}`, { replace: true });
       }
     } catch (e) {
       setError(e.message);
     }
-  }, [selectedCircleId, navigate]);
+  }, [id, navigate]);
 
   const fetchCircle = useCallback(async (id) => {
     if (!id) return;
@@ -119,6 +121,10 @@ export default function CircleDetail() {
       ]);
       if (!circleRes.ok) {
         if (circleRes.status === 401) navigate('/login');
+        if (circleRes.status === 404) {
+          navigate('/circles');
+          return;
+        }
         throw new Error('Failed to load circle');
       }
       if (!txRes.ok) throw new Error('Failed to load transactions');
@@ -153,11 +159,16 @@ export default function CircleDetail() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to create circle');
+      const newCircle = json.data || json;
       await fetchUserCircles();
       setShowCreateCircle(false);
       setCircleForm({ name: '', type: 'friends' });
       setSuccessMessage('Circle created successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
+      // Navigate to the new circle
+      if (newCircle && newCircle.id) {
+        navigate(`/circles/${newCircle.id}`);
+      }
     } catch (err) {
       setCircleFormError(err.message);
     } finally {
@@ -303,8 +314,11 @@ export default function CircleDetail() {
   }, [currentUser, fetchUserCircles, navigate]);
 
   useEffect(() => {
-    if (selectedCircleId) fetchCircle(selectedCircleId);
-  }, [selectedCircleId, fetchCircle]);
+    if (id) {
+      setSelectedCircleId(id);
+      fetchCircle(id);
+    }
+  }, [id, fetchCircle]);
 
   useEffect(() => {
     if (circle && circle.members) {
@@ -501,7 +515,13 @@ export default function CircleDetail() {
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <select
               value={selectedCircleId || ''}
-              onChange={(e) => setSelectedCircleId(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  navigate(`/circles/${e.target.value}`);
+                } else {
+                  navigate('/circles');
+                }
+              }}
               className="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
             >
               <option value="">Select circle</option>
@@ -528,59 +548,32 @@ export default function CircleDetail() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-slate-900">Members</h2>
-                <div className="flex items-center gap-2">
-                  {isAdmin && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="email"
-                        placeholder="Invitee email"
-                        value={inviteEmail}
-                        onChange={e => setInviteEmail(e.target.value)}
-                        className="px-2 py-1 border border-slate-300 rounded text-sm"
-                      />
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={async () => {
-                          if (!inviteEmail || inviteEmail.indexOf('@') === -1) {
-                            setInviteError('Enter a valid email');
-                            return;
-                          }
-                          setInviteError('');
-                          setInviteSuccess('');
-                          setInviteLoading(true);
-                          try {
-                            const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
-                              method: 'POST',
-                              credentials: 'include',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-                              },
-                              body: JSON.stringify({ email: inviteEmail }),
-                            });
-                            const json = await res.json();
-                            if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
-                            setInviteSuccess('Invitation sent');
-                            setInviteEmail('');
-                            setTimeout(() => setInviteSuccess(''), 3000);
-                          } catch (err) {
-                            setInviteError(err.message);
-                          } finally {
-                            setInviteLoading(false);
-                          }
-                        }}
-                      >
-                        {inviteLoading ? 'Sending...' : 'Invite'}
-                      </Button>
-                    </div>
-                  )}
-                  {selectedCircleId && (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-600">Loading circle details...</p>
+            </div>
+          </div>
+        ) : !circle ? (
+          <div className="text-center py-12">
+            <p className="text-slate-600">Circle not found</p>
+            <Button className="mt-4" onClick={() => navigate('/circles')}>
+              Back to Circles
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-6">
+            {/* Circle Info */}
+            <Card className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h1 className="text-xl font-bold text-slate-900">{circle?.name}</h1>
+                  <p className="text-sm text-slate-500 capitalize">{circle?.type} circle</p>
+                </div>
+                {isAdmin && (
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -588,84 +581,201 @@ export default function CircleDetail() {
                         setCircleForm({ name: circle?.name || '', type: circle?.type || 'friends' });
                         setShowUpdateCircle(true);
                       }}
-                      disabled={!isAdmin}
                     >
-                      <Edit className="w-4 h-4 mr-1" /> Edit
+                      <Edit className="w-4 h-4" />
                     </Button>
-                  )}
-                  {selectedCircleId && (
                     <Button
                       size="sm"
-                      variant="danger"
+                      variant="outline"
                       onClick={() => setShowDeleteConfirm(true)}
-                      disabled={!isAdmin}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
-                      <Trash className="w-4 h-4 mr-1" /> Delete
+                      <Trash className="w-4 h-4" />
                     </Button>
-                  )}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-4 text-sm text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Users className="w-4 h-4" />
+                  <span>{(circle?.members || []).length} members</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Created {circle?.created_at ? new Date(circle.created_at).toLocaleDateString() : 'recently'}</span>
                 </div>
               </div>
+            </Card>
+
+            {/* Members Section */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Members</h2>
+                <span className="text-sm text-slate-500">{(circle?.members || []).length} total</span>
+              </div>
+
+              {/* Invite Section */}
+              {isAdmin && (
+                <div className="mb-6 p-4 bg-slate-50 rounded-lg">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Invite new member
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      placeholder="Enter email address"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={inviteLoading || !inviteEmail.includes('@')}
+                      onClick={async () => {
+                        if (!inviteEmail || inviteEmail.indexOf('@') === -1) {
+                          setInviteError('Enter a valid email');
+                          return;
+                        }
+                        setInviteError('');
+                        setInviteSuccess('');
+                        setInviteLoading(true);
+                        try {
+                          const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+                            },
+                            body: JSON.stringify({ email: inviteEmail }),
+                          });
+                          const json = await res.json();
+                          if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
+                          setInviteSuccess('Invitation sent successfully!');
+                          setInviteEmail('');
+                          setTimeout(() => setInviteSuccess(''), 3000);
+                        } catch (err) {
+                          setInviteError(err.message);
+                        } finally {
+                          setInviteLoading(false);
+                        }
+                      }}
+                    >
+                      {inviteLoading ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <UserPlus className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {inviteError && (
+                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                      <X className="w-4 h-4" />
+                      {inviteError}
+                    </p>
+                  )}
+                  {inviteSuccess && (
+                    <p className="mt-2 text-sm text-green-600">
+                      ✓ {inviteSuccess}
+                    </p>
+                  )}
+                </div>
+              )}
+              {/* Members List */}
               {loading ? (
-                <div className="space-y-3">
-                  <div className="h-8 bg-slate-100 rounded"></div>
-                  <div className="h-8 bg-slate-100 rounded"></div>
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-100 rounded-full animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-slate-100 rounded animate-pulse mb-1"></div>
+                        <div className="h-3 bg-slate-100 rounded animate-pulse w-2/3"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (circle?.members || []).length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 font-medium">No members yet</p>
+                  <p className="text-sm text-slate-400">Invite people to join this circle</p>
                 </div>
               ) : (
-                <>
-                  <div className="space-y-3">
-                    {(circle?.members || []).length === 0 ? (
-                      <p className="text-sm text-slate-600">No members found</p>
-                    ) : (
-                      (circle.members || []).map(m => (
-                        <div key={m.user_id || m.id} className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-sm">
-                              {(m.user?.username || m.username || m.name || '?').slice(0, 1).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">
-                                {m.user?.username || m.username || m.name || m.email}
-                                <span className="ml-2 text-xs text-slate-500">({m.role})</span>
-                              </div>
-                              <div className="text-xs text-slate-500">{m.user?.email || m.email || ''}</div>
-                            </div>
+                <div className="space-y-3">
+                  {(circle.members || []).map(m => {
+                    const isCurrentUser = m.user_id === currentUser?.user_id;
+                    const displayName = m.user?.username || m.username || m.name || m.email;
+                    const email = m.user?.email || m.email || '';
+                    const initials = displayName.slice(0, 2).toUpperCase();
+                    
+                    return (
+                      <div key={m.user_id || m.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-sm font-medium shadow-sm">
+                            {initials}
                           </div>
-                          {isAdmin && m.user_id !== currentUser.user_id && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setShowUpdateRole({ memberId: m.user_id, currentRole: m.role })}
-                              >
-                                <UserPlus className="w-4 h-4 mr-1" /> Role
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={() => setShowRemoveMember(m.user_id)}
-                              >
-                                <UserMinus className="w-4 h-4 mr-1" /> Remove
-                              </Button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-slate-900 truncate">
+                                {displayName}
+                                {isCurrentUser && <span className="text-slate-500">(You)</span>}
+                              </p>
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                m.role === 'admin' 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {m.role}
+                              </span>
                             </div>
-                          )}
+                            {email && (
+                              <p className="text-xs text-slate-500 truncate">{email}</p>
+                            )}
+                          </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                  {inviteError && <div className="mt-2 text-sm text-red-600">{inviteError}</div>}
-                  {inviteSuccess && <div className="mt-2 text-sm text-green-600">{inviteSuccess}</div>}
-                </>
+                        
+                        {isAdmin && !isCurrentUser && (
+                          <div className="flex gap-1 ml-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowUpdateRole({ memberId: m.user_id, currentRole: m.role })}
+                              className="p-2"
+                              title="Change role"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowRemoveMember(m.user_id)}
+                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Remove member"
+                            >
+                              <UserMinus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-              {selectedCircleId && (
+              
+              {/* Leave Circle Button */}
+              <div className="pt-4 mt-6 border-t border-slate-200">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setShowLeaveConfirm(true)}
-                  className="mt-4"
+                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                 >
-                  <UserMinus className="w-4 h-4 mr-1" /> Leave Circle
+                  <UserMinus className="w-4 h-4 mr-2" />
+                  Leave Circle
                 </Button>
-              )}
+              </div>
             </Card>
           </div>
 
@@ -1262,7 +1372,8 @@ export default function CircleDetail() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

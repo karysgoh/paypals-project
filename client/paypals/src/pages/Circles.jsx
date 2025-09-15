@@ -360,7 +360,7 @@ export default function Circles() {
                 <div className="flex items-center gap-4 text-sm text-slate-600 mb-6">
                   <div className="flex items-center gap-1">
                     <Users className="w-4 h-4" />
-                    <span>{circle.members?.length || circle.member_count || 0} members</span>
+                    <span>{circle.memberCount} members</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
