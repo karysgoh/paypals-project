@@ -335,24 +335,16 @@ module.exports = {
 
     getUserTransactionSummary: catchAsync(async (req, res, next) => {
         try {
-            const { circleId } = req.params;
             const userId = res.locals.user_id;
 
-            const circleIdNum = parseInt(circleId, 10);
-
             logger.info('Transaction: getUserTransactionSummary called', { 
-                circleId: circleIdNum, 
                 userId 
             });
 
-            // Get user's transactions with summary data
-            const result = await transactionModel.getCircleTransactions(circleIdNum, userId, { 
-                userOnly: true, 
-                limit: 1000 // Get all user transactions for summary
-            });
+            // Get all user's transactions
+            const transactions = await transactionModel.getUserTransactions(userId);
 
             // Calculate summary statistics
-            const transactions = result.transactions;
             const summary = {
                 total_transactions: transactions.length,
                 total_amount_owed: transactions.reduce((sum, t) => sum + (t.user_amount_owed || 0), 0),
@@ -381,7 +373,7 @@ module.exports = {
             });
 
             logger.info('Transaction summary retrieved successfully', { 
-                circleId: circleIdNum,
+                userId: userId,
                 totalTransactions: summary.total_transactions
             });
 

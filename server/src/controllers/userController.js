@@ -268,5 +268,31 @@ module.exports = {
         }
       }
     });
+  }),
+
+  searchUsers: catchAsync(async (req, res, next) => {
+    const { q: searchQuery, limit } = req.query;
+    
+    if (!searchQuery) {
+      logger.warn("User search failed: Missing search query");
+      return next(new AppError("Search query is required", 400));
+    }
+
+    if (searchQuery.length < 2) {
+      logger.warn("User search failed: Search query too short");
+      return next(new AppError("Search query must be at least 2 characters", 400));
+    }
+
+    const users = await userModel.findUsersByUsername(searchQuery, limit);
+    
+    logger.debug(`User search for "${searchQuery}" returned ${users.length} results`);
+    
+    res.status(200).json({
+      status: "success",
+      data: {
+        users: users,
+        count: users.length
+      }
+    });
   })
 };

@@ -311,5 +311,34 @@ module.exports = {
         } catch (error) {
             throw error;
         }
+    },
+
+    findUsersByUsername: async (searchQuery, limit = 10) => {
+        try {
+            const users = await prisma.user.findMany({
+                where: {
+                    username: {
+                        contains: searchQuery,
+                        mode: 'insensitive'
+                    },
+                    status: 'active', // Only return active users
+                    email_verified: true // Only return verified users
+                },
+                select: {
+                    id: true,
+                    username: true,
+                    email: true
+                },
+                take: parseInt(limit, 10),
+                orderBy: {
+                    username: 'asc'
+                }
+            });
+            
+            return users;
+        } catch (error) {
+            console.error('Error in findUsersByUsername:', error);
+            throw error;
+        }
     }
 };

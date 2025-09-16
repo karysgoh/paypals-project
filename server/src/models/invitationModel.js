@@ -139,17 +139,23 @@ module.exports = {
                 const existingMember = await tx.circleMember.findFirst({
                     where: {
                         circle_id: invitation.circle_id,
-                        user_id: userId,
-                        status: { in: ['active', 'pending'] }
+                        user_id: userId
                     }
                 });
-                if (existingMember) {
-                    throw new Error('You are already a member of this circle');
-                }
-
-                // 3) Add user to circle
-                const newMember = await tx.circleMember.create({
-                    data: {
+                
+                // 3) Use upsert to handle both new and existing members
+                const newMember = await tx.circleMember.upsert({
+                    where: {
+                        circle_id_user_id: {
+                            circle_id: invitation.circle_id,
+                            user_id: userId
+                        }
+                    },
+                    update: {
+                        status: 'active',
+                        role: 'member'
+                    },
+                    create: {
                         circle_id: invitation.circle_id,
                         user_id: userId,
                         role: 'member',

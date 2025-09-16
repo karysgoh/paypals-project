@@ -206,7 +206,6 @@ export default function Tutorial() {
 
   const { currentUser, loading: authLoading } = useAuth();
 
-  // Define steps based on authentication state
   const guestSteps = [
     {
       id: 'welcome',
@@ -279,16 +278,13 @@ export default function Tutorial() {
   const total = steps.length;
   const isLastStep = stepIndex === total - 1;
 
-  // Update current step ref
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // Tutorial activation logic
   useEffect(() => {
     let shouldActivate = false;
 
-    // Activate if user navigated to /tutorial or tutorial flow was started
     if (stepIndex > 0) {
       shouldActivate = true;
     } else if (location.pathname === '/tutorial') {
@@ -300,34 +296,27 @@ export default function Tutorial() {
     setIsTutorialActive(shouldActivate);
   }, [stepIndex, location.pathname]);
 
-  // Also activate tutorial when manually started
   const startTutorial = useCallback(() => {
-    // Start the interactive tutorial: set to first interactive step (index 1)
     const firstInteractive = steps.length > 1 ? 1 : 0;
     setIsTutorialActive(true);
     setStepIndex(firstInteractive);
 
-    // Navigate to the first interactive step route immediately so the effect and DOM can settle
     try {
       const route = steps[firstInteractive]?.route || '/';
       navigate(route, { replace: false });
     } catch (e) {
-      // ignore navigation errors
+
     }
   }, [navigate, steps]);
 
-  // Enhanced element finding with better error handling
   const findElement = useCallback((selector, retries = 10) => {
-  // Attempt to find element for selector
     if (!currentStepRef.current || currentStepRef.current.selector !== selector) {
-      return false; // Step has changed, abort
+      return false; 
     }
 
     const element = document.querySelector(selector);
-  // element found status logged only when needed
     
     if (element) {
-  // Clear any scheduled retry
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
@@ -340,16 +329,13 @@ export default function Tutorial() {
       isLoadingRef.current = false;
       setError(null);
 
-  // Remove previous highlight
       if (highlightedElementRef.current && highlightedElementRef.current !== element) {
         highlightedElementRef.current.classList.remove('tour-highlight');
       }
 
-      // Add highlight to new element
       element.classList.add('tour-highlight');
       highlightedElementRef.current = element;
 
-  // Scroll element into view if needed
       if (elementRect.bottom > window.innerHeight || elementRect.top < 0) {
         element.scrollIntoView({ 
           behavior: 'smooth', 
@@ -357,7 +343,6 @@ export default function Tutorial() {
           inline: 'nearest'
         });
         
-        // Update rect after scroll animation
         setTimeout(() => {
           if (currentStepRef.current?.selector === selector) {
             const newRect = element.getBoundingClientRect();
@@ -368,15 +353,11 @@ export default function Tutorial() {
 
   return true;
     } else if (retries > 0) {
-      // Schedule retry 
-  // schedule retry
       retryTimeoutRef.current = setTimeout(() => {
         findElement(selector, retries - 1);
       }, 800);
       return false;
     } else {
-      // Element not found after all retries
-  // element not found after retries
       setElementFound(false);
       setRect(null);
       setIsLoading(false);
@@ -385,9 +366,7 @@ export default function Tutorial() {
     }
   }, [setRect, setElementFound, setIsLoading, setError]);
 
-  // Handle step changes with improved navigation
   useEffect(() => {
-    // Only run tutorial step logic when the tutorial is active.
     if (!isTutorialActive) return;
     if (!currentStep || authLoading) return;
 
@@ -397,7 +376,6 @@ export default function Tutorial() {
     setRect(null);
     setError(null);
 
-    // Clear any existing timeouts
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
@@ -407,18 +385,15 @@ export default function Tutorial() {
       setupTimeoutRef.current = null;
     }
 
-    // Disconnect any existing observer
     if (observerRef.current) {
       observerRef.current.disconnect();
       observerRef.current = null;
     }
 
-    // Navigate to the route first if needed
     if (currentStep.route !== window.location.pathname) {
       navigate(currentStep.route, { replace: false });
     }
 
-    // If there is no selector and we're already on the correct route, skip the delay
     if (!currentStep.selector && currentStep.route === window.location.pathname) {
       setElementFound(true);
       setRect(null);
@@ -427,19 +402,15 @@ export default function Tutorial() {
       return;
     }
 
-    // Wait for navigation and DOM updates
     setupTimeoutRef.current = setTimeout(() => {
       if (currentStep.selector && currentStepRef.current === currentStep) {
-        // Try finding immediately
         const found = findElement(currentStep.selector);
 
-        // If not found immediately, stop the blocking loading state so the user sees the tooltip fallback
         if (!found) {
           setIsLoading(false);
           isLoadingRef.current = false;
         }
 
-        // Set up DOM mutation observer for dynamic content
         const observer = new MutationObserver(() => {
           const el = document.querySelector(currentStep.selector);
           if (el) {
@@ -462,7 +433,6 @@ export default function Tutorial() {
       }
     }, 500);
 
-    // Hard fallback: if still loading after 3 seconds, stop loading and show tooltip anyway
     const hardFallback = setTimeout(() => {
       if (isLoadingRef.current) {
         setIsLoading(false);
@@ -489,17 +459,14 @@ export default function Tutorial() {
     };
   }, [stepIndex, currentStep, navigate, authLoading, isTutorialActive]);
 
-  // Track loading state changes for debugging
   useEffect(() => {
     console.log('[tutorial] isLoading changed to:', isLoading, 'for step', currentStep?.id);
   }, [isLoading, currentStep?.id]);
 
-  // Track stepIndex changes for debugging  
   useEffect(() => {
     console.log('[tutorial] stepIndex changed to:', stepIndex, 'currentStep:', currentStep?.id);
   }, [stepIndex, currentStep?.id]);
 
-  // Disconnect observer when loading stops to prevent unnecessary mutations
   useEffect(() => {
     if (!isLoading && observerRef.current) {
       console.log('[tutorial] loading stopped - disconnecting observer');
@@ -508,7 +475,6 @@ export default function Tutorial() {
     }
   }, [isLoading]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       document.querySelectorAll('.tour-highlight').forEach((el) => {
@@ -526,7 +492,6 @@ export default function Tutorial() {
   const next = useCallback(() => {
     console.log('[tutorial] next() called, current stepIndex:', stepIndex, 'total:', total);
     
-    // Remove current highlight
     if (highlightedElementRef.current) {
       highlightedElementRef.current.classList.remove('tour-highlight');
       highlightedElementRef.current = null;
@@ -537,7 +502,6 @@ export default function Tutorial() {
       setStepIndex(prev => prev + 1);
     } else {
       console.log('[tutorial] tour completed, navigating based on auth state');
-      // Tour completed - redirect based on auth state
       setStepIndex(0);
       setIsTutorialActive(false);
       if (currentUser) {
@@ -549,7 +513,6 @@ export default function Tutorial() {
   }, [stepIndex, total, navigate, currentUser]);
 
   const prev = useCallback(() => {
-    // Remove current highlight
     if (highlightedElementRef.current) {
       highlightedElementRef.current.classList.remove('tour-highlight');
       highlightedElementRef.current = null;
@@ -561,7 +524,6 @@ export default function Tutorial() {
   }, [stepIndex]);
 
   const close = useCallback(() => {
-    // Remove current highlight
     if (highlightedElementRef.current) {
       highlightedElementRef.current.classList.remove('tour-highlight');
       highlightedElementRef.current = null;
@@ -580,7 +542,6 @@ export default function Tutorial() {
     return null;
   }
 
-  // Show loading state while auth is loading or navigating/mounting
   if (authLoading || isLoading) {
     console.log('[tutorial] showing loading state for step', currentStep?.id, 'index', stepIndex, 'authLoading:', authLoading);
     return (
@@ -592,7 +553,6 @@ export default function Tutorial() {
 
   return (
     <>
-      {/* Main tutorial interface - only show on tutorial route when stepIndex is 0 */}
       {currentStep?.route === '/tutorial' && stepIndex === 0 && (
         <div className="min-h-screen bg-white">
           <section className="pt-12 pb-12 sm:pt-20 sm:pb-16">
@@ -651,7 +611,6 @@ export default function Tutorial() {
         </div>
       )}
 
-      {/* Tooltip overlay - show during active tutorial (stepIndex > 0) */}
       {!isLoading && stepIndex > 0 && currentStep && (
         <Tooltip
           rect={rect}
@@ -670,7 +629,6 @@ export default function Tutorial() {
         />
       )}
 
-      {/* Enhanced highlight styles */}
       <style>{`
         .tour-highlight {
           box-shadow: 

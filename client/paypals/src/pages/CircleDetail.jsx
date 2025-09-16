@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useNavigate, useParams } from "react-router-dom";
-import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus } from "lucide-react";
+import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus, Search, Mail } from "lucide-react";
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -45,6 +45,15 @@ export default function CircleDetail() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  
+  // New state for enhanced invitation
+  const [inviteInput, setInviteInput] = useState('');
+  const [inviteMode, setInviteMode] = useState('search'); // 'search' or 'email'
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [existingMemberResults, setExistingMemberResults] = useState([]);
   const [showCreateCircle, setShowCreateCircle] = useState(false);
   const [showUpdateCircle, setShowUpdateCircle] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -305,6 +314,129 @@ export default function CircleDetail() {
     }
   };
 
+  // Search users by username
+  const searchUsers = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      setExistingMemberResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const res = await fetch(`${apiBase}/users/search?q=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+      
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to search users');
+      
+      // Separate available users from existing members
+      const currentMembers = circle?.members || [];
+      
+      const allResults = json.data?.users || [];
+      const availableUsers = [];
+      const existingMembers = [];
+      
+      allResults.forEach(user => {
+        // Convert IDs to strings for comparison to handle type mismatches
+        const userId = String(user.id);
+        const currentUserId = String(currentUser?.user_id || '');
+        
+        // Skip current user entirely
+        if (userId === currentUserId) {
+          return;
+        }
+        
+        // Check if user is already a member
+        const isExistingMember = currentMembers.some(member => {
+          const memberUserId = String(member.user_id || '');
+          return memberUserId === userId;
+        });
+        
+        if (isExistingMember) {
+          existingMembers.push(user);
+        } else {
+          availableUsers.push(user);
+        }
+      });
+      
+      setSearchResults(availableUsers);
+      setExistingMemberResults(existingMembers);
+      setShowSearchResults(true);
+    } catch (err) {
+      console.error('Search error:', err);
+      setSearchResults([]);
+      setShowSearchResults(false);
+    } finally {
+      setSearching(false);
+    }
+  }, [apiBase, currentUser?.user_id, circle?.members]);
+
+  // Handle invite submission
+  const handleInviteSubmit = async () => {
+    if (!inviteInput.trim()) {
+      setInviteError('Please enter a username or email');
+      return;
+    }
+
+    setInviteError('');
+    setInviteSuccess('');
+    setInviteLoading(true);
+
+    try {
+      let body = {};
+      
+      if (selectedUser) {
+        // Invite by user ID
+        body = { inviteeId: selectedUser.id };
+      } else if (inviteInput.includes('@')) {
+        // Invite by email
+        body = { email: inviteInput };
+      } else {
+        setInviteError('Please select a user from search results or enter a valid email');
+        setInviteLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+        body: JSON.stringify(body),
+      });
+      
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
+      
+      setInviteSuccess(selectedUser ? 
+        `Invitation sent to @${selectedUser.username}!` : 
+        'Invitation sent to email successfully!'
+      );
+      
+      // Reset form
+      setInviteInput('');
+      setSelectedUser(null);
+      setSearchResults([]);
+      setShowSearchResults(false);
+      setTimeout(() => setInviteSuccess(''), 3000);
+      
+    } catch (err) {
+      setInviteError(err.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
@@ -372,7 +504,7 @@ export default function CircleDetail() {
     if (included.length === 0) return setTxError('Select at least one participant');
 
     if (currentUser) {
-      const creatorIncluded = included.some(p => p.user_id === currentUser.id);
+      const creatorIncluded = included.some(p => p.user_id === currentUser.user_id);
       if (!creatorIncluded) return setTxError('Transaction creator must be included as a participant');
     }
 
@@ -615,61 +747,230 @@ export default function CircleDetail() {
                 <span className="text-sm text-slate-500">{(circle?.members || []).length} total</span>
               </div>
 
-              {/* Invite Section */}
+              {/* Enhanced Invite Section */}
               {isAdmin && (
                 <div className="mb-6 p-4 bg-slate-50 rounded-lg">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">
                     Invite new member
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      placeholder="Enter email address"
-                      value={inviteEmail}
-                      onChange={e => setInviteEmail(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
-                    />
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={inviteLoading || !inviteEmail.includes('@')}
-                      onClick={async () => {
-                        if (!inviteEmail || inviteEmail.indexOf('@') === -1) {
-                          setInviteError('Enter a valid email');
-                          return;
-                        }
-                        setInviteError('');
-                        setInviteSuccess('');
-                        setInviteLoading(true);
-                        try {
-                          const res = await fetch(`${apiBase}/invitations/${selectedCircleId}`, {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-                            },
-                            body: JSON.stringify({ email: inviteEmail }),
-                          });
-                          const json = await res.json();
-                          if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
-                          setInviteSuccess('Invitation sent successfully!');
-                          setInviteEmail('');
-                          setTimeout(() => setInviteSuccess(''), 3000);
-                        } catch (err) {
-                          setInviteError(err.message);
-                        } finally {
-                          setInviteLoading(false);
-                        }
+                  
+                  {/* Mode Toggle */}
+                  <div className="flex gap-1 mb-3 bg-white rounded-lg p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInviteMode('search');
+                        setInviteInput('');
+                        setSelectedUser(null);
+                        setSearchResults([]);
+                        setExistingMemberResults([]);
+                        setShowSearchResults(false);
                       }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        inviteMode === 'search' 
+                          ? 'bg-slate-900 text-white' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
                     >
-                      {inviteLoading ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <UserPlus className="w-4 h-4" />
-                      )}
-                    </Button>
+                      <Search className="w-4 h-4" />
+                      Search Username
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInviteMode('email');
+                        setInviteInput('');
+                        setSelectedUser(null);
+                        setSearchResults([]);
+                        setExistingMemberResults([]);
+                        setShowSearchResults(false);
+                      }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        inviteMode === 'email' 
+                          ? 'bg-slate-900 text-white' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Mail className="w-4 h-4" />
+                      Email Invite
+                    </button>
                   </div>
+
+                  {/* Input Section */}
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type={inviteMode === 'email' ? 'email' : 'text'}
+                          placeholder={
+                            inviteMode === 'search' 
+                              ? 'Search by username...' 
+                              : 'Enter email address'
+                          }
+                          value={inviteInput}
+                          onChange={(e) => {
+                            setInviteInput(e.target.value);
+                            if (inviteMode === 'search') {
+                              setSelectedUser(null);
+                              searchUsers(e.target.value);
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                        />
+                        
+                        {/* Selected User Indicator */}
+                        {selectedUser && (
+                          <div className="absolute inset-0 flex items-center px-3 bg-green-50 border border-green-300 rounded-md">
+                            <div className="flex items-center gap-2 text-green-800">
+                              <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                {selectedUser.username.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium">@{selectedUser.username}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(null);
+                                  setInviteInput('');
+                                  setShowSearchResults(false);
+                                  setExistingMemberResults([]);
+                                }}
+                                className="ml-auto text-green-600 hover:text-green-800"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Loading Indicator */}
+                        {searching && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={
+                          inviteLoading || 
+                          !inviteInput.trim() ||
+                          (inviteMode === 'email' && !inviteInput.includes('@'))
+                        }
+                        onClick={handleInviteSubmit}
+                      >
+                        {inviteLoading ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <UserPlus className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Search Results Dropdown */}
+                    {showSearchResults && (searchResults.length > 0 || existingMemberResults.length > 0) && !selectedUser && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                        {/* Available Users */}
+                        {searchResults.length > 0 && (
+                          <>
+                            {searchResults.length > 0 && existingMemberResults.length > 0 && (
+                              <div className="px-3 py-2 text-xs font-medium text-slate-500 bg-slate-50 border-b border-slate-100">
+                                Available to invite
+                              </div>
+                            )}
+                            {searchResults.map((user) => (
+                              <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setInviteInput(`@${user.username}`);
+                                  setShowSearchResults(false);
+                                }}
+                                className="w-full px-3 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-b-0 focus:outline-none focus:bg-slate-50"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-medium text-slate-900">@{user.username}</div>
+                                    <div className="text-xs text-slate-500">{user.email}</div>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        
+                        {/* Existing Members */}
+                        {existingMemberResults.length > 0 && (
+                          <>
+                            <div className="px-3 py-2 text-xs font-medium text-slate-500 bg-amber-50 border-b border-amber-100">
+                              Already in circle
+                            </div>
+                            {existingMemberResults.map((user) => (
+                              <div
+                                key={`existing-${user.id}`}
+                                className="w-full px-3 py-3 bg-amber-50 border-b border-amber-100 last:border-b-0 cursor-not-allowed"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium text-amber-800">@{user.username}</div>
+                                    <div className="text-xs text-amber-600">{user.email}</div>
+                                  </div>
+                                  <div className="text-xs text-amber-600 font-medium">Member</div>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* No Results Message */}
+                    {showSearchResults && searchResults.length === 0 && existingMemberResults.length === 0 && inviteInput.length >= 2 && !searching && inviteMode === 'search' && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-10 p-3 text-center text-slate-500 text-sm">
+                        No users found. Try inviting by email instead!
+                      </div>
+                    )}
+                    
+                    {/* Only Existing Members Found Message */}
+                    {showSearchResults && searchResults.length === 0 && existingMemberResults.length > 0 && inviteInput.length >= 2 && !searching && inviteMode === 'search' && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-10">
+                        {/* Show existing members above */}
+                        <div className="px-3 py-2 text-xs font-medium text-slate-500 bg-amber-50 border-b border-amber-100">
+                          Already in circle
+                        </div>
+                        {existingMemberResults.map((user) => (
+                          <div
+                            key={`existing-${user.id}`}
+                            className="w-full px-3 py-3 bg-amber-50 border-b border-amber-100 last:border-b-0 cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                {user.username.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-amber-800">@{user.username}</div>
+                                <div className="text-xs text-amber-600">{user.email}</div>
+                              </div>
+                              <div className="text-xs text-amber-600 font-medium">Member</div>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="p-3 text-center text-slate-500 text-sm border-t border-slate-200">
+                          This user is already a member. Try searching for someone else or invite by email.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status Messages */}
                   {inviteError && (
                     <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                       <X className="w-4 h-4" />
@@ -681,6 +982,14 @@ export default function CircleDetail() {
                       ✓ {inviteSuccess}
                     </p>
                   )}
+                  
+                  {/* Help Text */}
+                  <p className="mt-2 text-xs text-slate-500">
+                    {inviteMode === 'search' 
+                      ? 'Search for existing users by username, or switch to email to invite new users.'
+                      : 'Send an invitation email to someone who doesn\'t have an account yet.'
+                    }
+                  </p>
                 </div>
               )}
               {/* Members List */}
@@ -1357,6 +1666,11 @@ export default function CircleDetail() {
                         )}
                       </div>
                       <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4">
+                        {txError && (
+                          <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm mb-4">
+                            {txError}
+                          </div>
+                        )}
                         <div className="flex items-center justify-end gap-3">
                           <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
                             Cancel

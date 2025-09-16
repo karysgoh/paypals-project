@@ -52,6 +52,9 @@ export default function Circles() {
   const [invitations, setInvitations] = useState([]);
   const [newCircleName, setNewCircleName] = useState("");
   const [newCircleType, setNewCircleType] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [processingInvitation, setProcessingInvitation] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -112,32 +115,68 @@ export default function Circles() {
 
   const handleAcceptInvitation = async (invitationId) => {
     try {
+      setErrorMessage("");
+      setProcessingInvitation(invitationId);
+      
       const res = await fetch(`http://localhost:3000/api/invitations/${invitationId}/accept`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (!res.ok) throw new Error('Failed to accept invitation');
-      await res.json();
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to accept invitation');
+      }
+      
+      const result = await res.json();
+      
+      // Remove the invitation from the list immediately
+      setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      
+      // Show success message
+      setSuccessMessage(`Successfully joined ${result.data?.circle?.name || 'the circle'}!`);
+      
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => setSuccessMessage(""), 5000);
+      
+      // Reload circles to show the new one
       loadData();
-      loadInvitations();
     } catch (error) {
       console.error('Error accepting invitation:', error);
+      setErrorMessage(error.message || 'Failed to accept invitation. Please try again.');
+      setTimeout(() => setErrorMessage(""), 5000);
+    } finally {
+      setProcessingInvitation(null);
     }
   };
 
   const handleRejectInvitation = async (invitationId) => {
     try {
+      setErrorMessage("");
+      setProcessingInvitation(invitationId);
+      
       const res = await fetch(`http://localhost:3000/api/invitations/${invitationId}/reject`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (!res.ok) throw new Error('Failed to reject invitation');
-      await res.json();
-      loadInvitations();
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to reject invitation');
+      }
+      
+      // Remove the invitation from the list immediately
+      setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      
+      // Show success message
+      setSuccessMessage("Invitation declined successfully.");
+      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
       console.error('Error rejecting invitation:', error);
+      setErrorMessage(error.message || 'Failed to reject invitation. Please try again.');
+      setTimeout(() => setErrorMessage(""), 5000);
+    } finally {
+      setProcessingInvitation(null);
     }
   };
 
@@ -270,6 +309,30 @@ export default function Circles() {
           </div>
         )}
 
+        {/* Success Message */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 text-sm">✓</span>
+              </div>
+              <p className="text-green-800 font-medium">{successMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 text-sm">!</span>
+              </div>
+              <p className="text-red-800 font-medium">{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
         {/* Pending Invitations */}
         {invitations.length > 0 && (
           <div className="mb-12">
@@ -294,15 +357,17 @@ export default function Circles() {
                         variant="primary"
                         size="sm"
                         onClick={() => handleAcceptInvitation(invite.id)}
+                        disabled={processingInvitation === invite.id}
                       >
-                        Accept
+                        {processingInvitation === invite.id ? 'Accepting...' : 'Accept'}
                       </Button>
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => handleRejectInvitation(invite.id)}
+                        disabled={processingInvitation === invite.id}
                       >
-                        Decline
+                        {processingInvitation === invite.id ? 'Declining...' : 'Decline'}
                       </Button>
                     </div>
                   </div>

@@ -90,6 +90,9 @@ router.get('/me', jwtMiddleware.verifyAccessToken, (req, res) => {
   res.status(200).json(user);
 });
 
+// [GET] Search users by username
+router.get('/users/search', jwtMiddleware.verifyAccessToken, userController.searchUsers);
+
 router.post("/logout", (req, res) => {
   res.clearCookie("authToken", {
     httpOnly: true,

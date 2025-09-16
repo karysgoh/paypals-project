@@ -640,14 +640,50 @@ module.exports = {
                         { members: { some: { user_id: userId } } },
                         { created_by: userId }
                     ]
+                },
+                include: {
+                    members: {
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    email: true
+                                }
+                            }
+                        }
+                    },
+                    creator: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true
+                        }
+                    },
+                    circle: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
                 }
-            })
+            });
 
             if(!userTransactions || userTransactions.length === 0){
                 throw new Error('No transactions found for this user');
             }
 
-            return userTransactions;
+            // Transform the data to include user-specific information
+            const transformedTransactions = userTransactions.map(transaction => {
+                const userMember = transaction.members.find(m => m.user_id === userId); // Find current user's membership info
+                return {
+                    ...transaction,
+                    user_amount_owed: userMember ? userMember.amount_owed : 0,
+                    user_payment_status: userMember ? userMember.payment_status : 'pending'
+                };
+            });
+
+            return transformedTransactions;
         } catch (error) {
             console.error('Error fetching user transactions:', error);
             throw error;
