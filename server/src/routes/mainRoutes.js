@@ -93,6 +93,9 @@ router.get('/me', jwtMiddleware.verifyAccessToken, (req, res) => {
 // [GET] Search users by username
 router.get('/users/search', jwtMiddleware.verifyAccessToken, userController.searchUsers);
 
+// [POST] Check if email belongs to a registered user
+router.post('/users/check-email', jwtMiddleware.verifyAccessToken, userController.findUserByEmail);
+
 router.post("/logout", (req, res) => {
   res.clearCookie("authToken", {
     httpOnly: true,

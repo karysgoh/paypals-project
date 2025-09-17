@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import Notification from "../components/Notification";
+import { useNotification } from "../hooks/useNotification";
 
 const Button = ({ children, variant = "default", size = "default", className = "", ...props }) => {
   const baseClasses = "inline-flex items-center justify-center rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
@@ -80,6 +82,9 @@ const RegisterPage = () => {
   const [success, setSuccess] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // Notification hook
+  const { notification, showNotification, hideNotification } = useNotification();
+
   useEffect(() => {
     if (currentUser && currentUser.email_verified) {
       navigate("/dashboard");
@@ -106,7 +111,7 @@ const RegisterPage = () => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      showNotification("Passwords do not match", 'error');
       return;
     }
 
@@ -117,16 +122,17 @@ const RegisterPage = () => {
         password: formData.password,
         email: formData.email,
       });
-      setSuccess(response.message || "Verification email sent. Please check your inbox.");
+      showNotification(response.message || "Verification email sent. Please check your inbox.", 'success');
       sessionStorage.setItem("registrationEmail", formData.email); 
     } catch (error) {
       console.error("Register failed:", error);
-      setError(
+      showNotification(
         error.status === 400
           ? "Invalid input. Please check your username or email."
           : error.status === 409
           ? "Username or email already exists."
-          : "Registration failed. Please try again."
+          : "Registration failed. Please try again.",
+        'error'
       );
     } finally {
       setIsRegistering(false);
@@ -154,6 +160,11 @@ const RegisterPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 bg-slate-50" style={{ width: '100%' }}>
+      <Notification 
+        message={notification.message} 
+        type={notification.type} 
+        onClose={hideNotification} 
+      />
       <div className="bg-white border border-slate-200 rounded-lg p-6 sm:p-10 max-w-md w-full shadow-sm">
         <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-4 sm:mb-6 text-center">Register</h2>
         {success ? (

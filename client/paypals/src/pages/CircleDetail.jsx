@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useNavigate, useParams } from "react-router-dom";
-import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus, Search, Mail } from "lucide-react";
+import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus, Search, Mail, User } from "lucide-react";
+import Notification from "../components/Notification";
+import { useNotification } from "../hooks/useNotification";
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -45,6 +47,12 @@ export default function CircleDetail() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  const [emailValidating, setEmailValidating] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState([]);
+  const [loadingInvitations, setLoadingInvitations] = useState(false);
+  
+  // Notification hook
+  const { notification, showNotification, hideNotification } = useNotification();
   
   // New state for enhanced invitation
   const [inviteInput, setInviteInput] = useState('');
@@ -69,6 +77,7 @@ export default function CircleDetail() {
   const [txForm, setTxForm] = useState({
     name: '',
     description: '',
+    category: 'other',
     total_amount: '',
     splitEven: true,
     participants: [],
@@ -141,6 +150,9 @@ export default function CircleDetail() {
       const txJson = await txRes.json();
       setCircle(circleJson.data || circleJson);
       setTransactions(txJson.data?.transactions || txJson.data || []);
+      
+      // Fetch pending invitations for this circle
+      fetchPendingInvitations(id);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -172,8 +184,7 @@ export default function CircleDetail() {
       await fetchUserCircles();
       setShowCreateCircle(false);
       setCircleForm({ name: '', type: 'friends' });
-      setSuccessMessage('Circle created successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Circle created successfully', 'success');
       // Navigate to the new circle
       if (newCircle && newCircle.id) {
         navigate(`/circles/${newCircle.id}`);
@@ -207,8 +218,7 @@ export default function CircleDetail() {
       await fetchCircle(selectedCircleId);
       setShowUpdateCircle(false);
       setCircleForm({ name: '', type: 'friends' });
-      setSuccessMessage('Circle updated successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Circle updated successfully', 'success');
     } catch (err) {
       setCircleFormError(err.message);
     } finally {
@@ -232,8 +242,7 @@ export default function CircleDetail() {
       setCircle(null);
       setTransactions([]);
       setShowDeleteConfirm(false);
-      setSuccessMessage('Circle deleted successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Circle deleted successfully', 'success');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -244,6 +253,18 @@ export default function CircleDetail() {
   const leaveCircle = async () => {
     setError(null);
     setCircleFormLoading(true);
+    
+    // Frontend validation: Check if user is the only admin
+    const adminMembers = circle?.members?.filter(m => m.role === 'admin') || [];
+    const isCurrentUserOnlyAdmin = adminMembers.length === 1 && adminMembers[0].user.user_id === currentUser?.id;
+    
+    if (isCurrentUserOnlyAdmin) {
+      showNotification('Cannot leave circle as the only admin. Please promote another member to admin first.', 'error');
+      setCircleFormLoading(false);
+      setShowLeaveConfirm(false);
+      return;
+    }
+    
     try {
       const res = await fetch(`${apiBase}/circles/${selectedCircleId}/leave`, {
         method: 'POST',
@@ -257,8 +278,7 @@ export default function CircleDetail() {
       setCircle(null);
       setTransactions([]);
       setShowLeaveConfirm(false);
-      setSuccessMessage('You have left the circle');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('You have left the circle', 'success');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -279,8 +299,7 @@ export default function CircleDetail() {
       if (!res.ok) throw new Error(json.error || 'Failed to remove member');
       await fetchCircle(selectedCircleId);
       setShowRemoveMember(null);
-      setSuccessMessage('Member removed successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Member removed successfully', 'success');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -305,8 +324,7 @@ export default function CircleDetail() {
       if (!res.ok) throw new Error(json.error || 'Failed to update member role');
       await fetchCircle(selectedCircleId);
       setShowUpdateRole(null);
-      setSuccessMessage('Member role updated successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Member role updated successfully', 'success');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -379,6 +397,39 @@ export default function CircleDetail() {
     }
   }, [apiBase, currentUser?.user_id, circle?.members]);
 
+  // Email validation function
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Check if email belongs to a registered user
+  const checkUserByEmail = async (email) => {
+    setEmailValidating(true);
+    try {
+      const res = await fetch(`${apiBase}/users/check-email`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        return json.data; // Returns user data if found, null if not found
+      }
+      return null;
+    } catch (error) {
+      console.error('Error checking user by email:', error);
+      return null;
+    } finally {
+      setEmailValidating(false);
+    }
+  };
+
   // Handle invite submission
   const handleInviteSubmit = async () => {
     if (!inviteInput.trim()) {
@@ -397,8 +448,38 @@ export default function CircleDetail() {
         // Invite by user ID
         body = { inviteeId: selectedUser.id };
       } else if (inviteInput.includes('@')) {
-        // Invite by email
-        body = { email: inviteInput };
+        // Validate email format first
+        if (!isValidEmail(inviteInput)) {
+          setInviteError('Please enter a valid email address');
+          setInviteLoading(false);
+          return;
+        }
+
+        // Check if email belongs to a registered user
+        const existingUser = await checkUserByEmail(inviteInput);
+        
+        if (existingUser) {
+          // Check if user is already a member of this circle
+          const isAlreadyMember = circle?.members?.some(member => 
+            member.user.email === inviteInput || member.user.user_id === existingUser.user_id
+          );
+          
+          if (isAlreadyMember) {
+            setInviteError('This user is already a member of the circle');
+            setInviteLoading(false);
+            return;
+          }
+          
+          // User exists, invite by user ID for better tracking
+          body = { inviteeId: existingUser.user_id };
+          // Store user info for success message
+          body.userInfo = existingUser;
+        } else {
+          // Email doesn't belong to a registered user
+          setInviteError('No registered user found with this email address. Please ask them to sign up first.');
+          setInviteLoading(false);
+          return;
+        }
       } else {
         setInviteError('Please select a user from search results or enter a valid email');
         setInviteLoading(false);
@@ -418,22 +499,78 @@ export default function CircleDetail() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to send invitation');
       
-      setInviteSuccess(selectedUser ? 
-        `Invitation sent to @${selectedUser.username}!` : 
-        'Invitation sent to email successfully!'
-      );
+      // Set appropriate success message
+      if (selectedUser) {
+        showNotification(`Invitation sent to @${selectedUser.username}!`, 'success');
+      } else if (body.userInfo) {
+        showNotification(`Invitation sent to ${body.userInfo.username || body.userInfo.email}!`, 'success');
+      } else {
+        showNotification('Invitation sent successfully!', 'success');
+      }
       
       // Reset form
       setInviteInput('');
       setSelectedUser(null);
       setSearchResults([]);
       setShowSearchResults(false);
-      setTimeout(() => setInviteSuccess(''), 3000);
+      
+      // Refresh pending invitations
+      fetchPendingInvitations();
       
     } catch (err) {
-      setInviteError(err.message);
+      showNotification(err.message, 'error');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  // Fetch pending invitations for the current circle
+  const fetchPendingInvitations = useCallback(async (circleId = null) => {
+    const targetCircleId = circleId || selectedCircleId;
+    if (!targetCircleId) return;
+    
+    setLoadingInvitations(true);
+    try {
+      const res = await fetch(`${apiBase}/invitations/circle/${targetCircleId}`, {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      
+      if (res.ok) {
+        const json = await res.json();
+        setPendingInvitations(json.data || []);
+      } else {
+        console.warn('Failed to load pending invitations:', res.statusText);
+        setPendingInvitations([]);
+      }
+    } catch (error) {
+      console.error('Error loading pending invitations:', error);
+      setPendingInvitations([]);
+    } finally {
+      setLoadingInvitations(false);
+    }
+  }, [selectedCircleId, apiBase]);
+
+  // Cancel/delete a pending invitation
+  const cancelInvitation = async (invitationId) => {
+    try {
+      const res = await fetch(`${apiBase}/invitations/${invitationId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      
+      if (res.ok) {
+        // Remove the cancelled invitation from the list
+        setPendingInvitations(prev => prev.filter(inv => (inv.id || inv.invitation_id) !== invitationId));
+        showNotification('Invitation cancelled successfully', 'success');
+      } else {
+        const json = await res.json();
+        showNotification(json.message || 'Failed to cancel invitation', 'error');
+      }
+    } catch (error) {
+      console.error('Error cancelling invitation:', error);
+      showNotification('An error occurred while cancelling the invitation', 'error');
     }
   };
 
@@ -526,6 +663,7 @@ export default function CircleDetail() {
     const payload = {
       name: txForm.name,
       description: txForm.description,
+      category: txForm.category,
       total_amount: total,
       participants: participantsPayload,
     };
@@ -553,6 +691,7 @@ export default function CircleDetail() {
       setTxForm({
         name: '',
         description: '',
+        category: 'other',
         total_amount: '',
         splitEven: true,
         participants: txForm.participants.map(p => ({ ...p, amount_owed: 0, include: true })),
@@ -565,8 +704,7 @@ export default function CircleDetail() {
       setSearchLat('');
       setSearchLng('');
       setSelectedPlace(null);
-      setSuccessMessage('Transaction created');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showNotification('Transaction created successfully', 'success');
     } catch (err) {
       setTxError(err.message);
     } finally {
@@ -636,8 +774,20 @@ export default function CircleDetail() {
 
   const isAdmin = circle?.members?.find(m => m.user.user_id === currentUser?.id)?.role === 'admin';
 
+  // Check if current user is the only admin
+  const isOnlyAdmin = useMemo(() => {
+    if (!circle?.members || !isAdmin) return false;
+    const adminMembers = circle.members.filter(m => m.role === 'admin');
+    return adminMembers.length === 1 && adminMembers[0].user.user_id === currentUser?.id;
+  }, [circle?.members, isAdmin, currentUser?.id]);
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
+      <Notification 
+        message={notification.message} 
+        type={notification.type} 
+        onClose={hideNotification} 
+      />
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -855,18 +1005,37 @@ export default function CircleDetail() {
                         variant="primary"
                         disabled={
                           inviteLoading || 
+                          emailValidating ||
                           !inviteInput.trim() ||
-                          (inviteMode === 'email' && !inviteInput.includes('@'))
+                          (inviteMode === 'email' && !inviteInput.includes('@')) ||
+                          (inviteMode === 'email' && inviteInput.includes('@') && !isValidEmail(inviteInput))
                         }
                         onClick={handleInviteSubmit}
                       >
-                        {inviteLoading ? (
+                        {(inviteLoading || emailValidating) ? (
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         ) : (
                           <UserPlus className="w-4 h-4" />
                         )}
                       </Button>
                     </div>
+
+                    {/* Email Validation Feedback */}
+                    {inviteMode === 'email' && inviteInput.includes('@') && (
+                      <div className="mt-2">
+                        {emailValidating ? (
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                            <span>Checking email...</span>
+                          </div>
+                        ) : !isValidEmail(inviteInput) ? (
+                          <div className="flex items-center gap-2 text-sm text-red-600">
+                            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                            <span>Please enter a valid email address</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
 
                     {/* Search Results Dropdown */}
                     {showSearchResults && (searchResults.length > 0 || existingMemberResults.length > 0) && !selectedUser && (
@@ -1075,17 +1244,140 @@ export default function CircleDetail() {
               
               {/* Leave Circle Button */}
               <div className="pt-4 mt-6 border-t border-slate-200">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowLeaveConfirm(true)}
-                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                >
-                  <UserMinus className="w-4 h-4 mr-2" />
-                  Leave Circle
-                </Button>
+                {isOnlyAdmin ? (
+                  <div className="space-y-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="w-full text-slate-400 border-slate-200 cursor-not-allowed"
+                    >
+                      <UserMinus className="w-4 h-4 mr-2" />
+                      Leave Circle
+                    </Button>
+                    <p className="text-xs text-slate-500 text-center">
+                      Cannot leave as the only admin. Promote another member to admin first.
+                    </p>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowLeaveConfirm(true)}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  >
+                    <UserMinus className="w-4 h-4 mr-2" />
+                    Leave Circle
+                  </Button>
+                )}
               </div>
             </Card>
+
+            {/* Pending Invitations Section */}
+            {isAdmin && (
+              <Card className="p-6 mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Pending Invitations</h2>
+                  {loadingInvitations ? (
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm">Loading...</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-500">{(pendingInvitations || []).length} pending</span>
+                  )}
+                </div>
+
+                {loadingInvitations ? (
+                  <div className="space-y-3">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg">
+                        <div className="w-8 h-8 bg-slate-100 rounded-full animate-pulse"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-slate-100 rounded animate-pulse mb-1"></div>
+                          <div className="h-3 bg-slate-100 rounded animate-pulse w-2/3"></div>
+                        </div>
+                        <div className="w-16 h-6 bg-slate-100 rounded animate-pulse"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (pendingInvitations || []).length === 0 ? (
+                  <div className="text-center py-8">
+                    <Mail className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500 font-medium">No pending invitations</p>
+                    <p className="text-sm text-slate-400">Invitations you send will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(pendingInvitations || []).map(invitation => {
+                      // Handle different possible data structures
+                      const inviteeDisplay = invitation.invitee 
+                        ? `@${invitation.invitee.username}` 
+                        : invitation.email || invitation.invitee_email || 'Unknown recipient';
+                      const inviterDisplay = invitation.inviter?.username || invitation.inviter_username || 'Unknown';
+                      const sentDate = new Date(invitation.created_at).toLocaleDateString('en-GB');
+                      const inviteType = invitation.invitee ? 'username' : 'email';
+                      
+                      return (
+                        <div key={invitation.id || invitation.invitation_id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+                              inviteType === 'username' ? 'bg-blue-500' : 'bg-purple-500'
+                            }`}>
+                              {inviteType === 'username' ? (
+                                <User className="w-4 h-4" />
+                              ) : (
+                                <Mail className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-medium text-slate-900 truncate">
+                                  {inviteeDisplay}
+                                </p>
+                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                  inviteType === 'username' 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-purple-100 text-purple-700'
+                                }`}>
+                                  {inviteType}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                By @{inviterDisplay} • {sentDate}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+                              Pending
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => cancelInvitation(invitation.id || invitation.invitation_id)}
+                              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 p-1"
+                              title="Cancel invitation"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {(pendingInvitations || []).length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs text-slate-500 text-center">
+                      Admin view • Invitations will move to Members once accepted
+                    </p>
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
 
           <div className="lg:col-span-2">
@@ -1342,6 +1634,12 @@ export default function CircleDetail() {
                     <p className="text-sm text-slate-600">
                       Are you sure you want to leave this circle? You will lose access to its transactions and members.
                     </p>
+                    {isAdmin && !isOnlyAdmin && (
+                      <div className="mt-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-sm">
+                        <p className="font-medium">⚠️ Admin Warning</p>
+                        <p>You are an admin of this circle. Consider promoting another member to admin before leaving to ensure proper circle management.</p>
+                      </div>
+                    )}
                     {error && (
                       <div className="mt-4 px-4 py-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
                         {error}
@@ -1483,6 +1781,26 @@ export default function CircleDetail() {
                             className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
                             placeholder="Additional details (optional)"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                          <select
+                            value={txForm.category}
+                            onChange={e => setTxForm(f => ({ ...f, category: e.target.value }))}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                          >
+                            <option value="food">Food & Dining</option>
+                            <option value="travel">Travel</option>
+                            <option value="entertainment">Entertainment</option>
+                            <option value="shopping">Shopping</option>
+                            <option value="transportation">Transportation</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="rent">Rent</option>
+                            <option value="groceries">Groceries</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="education">Education</option>
+                            <option value="other">Other</option>
+                          </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">Total Amount *</label>

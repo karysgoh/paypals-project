@@ -334,5 +334,61 @@ module.exports = {
             console.error('Error deleting invitation:', error);
             throw error;
         }
+    },
+
+    getCircleInvitations: async (circleId, userId) => {
+        try {
+            // First, verify the user is an admin of the circle
+            const isAdmin = await prisma.circleMember.findFirst({
+                where: { 
+                    circle_id: circleId, 
+                    user_id: userId, 
+                    role: 'admin',
+                    status: 'active'
+                }
+            });
+            
+            if (!isAdmin) {
+                throw new Error('Access denied: Only circle admins can view pending invitations');
+            }
+
+            // Get all pending invitations for this circle
+            const invitations = await prisma.invitation.findMany({
+                where: {
+                    circle_id: circleId,
+                    status: 'pending'
+                },
+                include: {
+                    inviter: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true
+                        }
+                    },
+                    invitee: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true
+                        }
+                    },
+                    circle: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                },
+                orderBy: {
+                    created_at: 'desc'
+                }
+            });
+
+            return invitations;
+        } catch (error) {
+            console.error('Error getting circle invitations:', error);
+            throw error;
+        }
     }
 };

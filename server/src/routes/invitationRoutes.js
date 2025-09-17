@@ -47,6 +47,12 @@ router.get(
     invitationController.readMy
 );
 
+router.get(
+    '/circle/:circleId',
+    jwtMiddleware.verifyAccessToken,
+    invitationController.readCircleInvitations
+);
+
 router.delete(
     '/:invitationId',
     jwtMiddleware.verifyAccessToken,

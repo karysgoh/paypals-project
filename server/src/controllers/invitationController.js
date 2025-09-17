@@ -109,5 +109,25 @@ module.exports = {
 			const mapped = mapInvitationError(error);
 			return next(new AppError(mapped.message, mapped.status));
 		}
+	}),
+
+	readCircleInvitations: catchAsync(async (req, res, next) => {
+		const { circleId } = req.params;
+		const userId = res.locals.user_id;
+		const circleIdNum = parseInt(circleId, 10);
+		
+		if (Number.isNaN(circleIdNum)) {
+			return next(new AppError('Invalid circle ID', 400));
+		}
+
+		try {
+			const result = await invitationModel.getCircleInvitations(circleIdNum, userId);
+			logger.info(`Circle ${circleIdNum} invitations retrieved by user ${userId}`);
+			res.status(200).json({ status: 'success', data: result });
+		} catch (error) {
+			logger.error(`Error reading circle invitations: ${error}`);
+			const mapped = mapInvitationError(error);
+			return next(new AppError(mapped.message, mapped.status));
+		}
 	})
 };

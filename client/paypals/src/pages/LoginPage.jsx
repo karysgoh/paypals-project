@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import Notification from "../components/Notification";
+import { useNotification } from "../hooks/useNotification";
 
 const Button = ({ children, variant = "default", size = "default", className = "", ...props }) => {
   const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
@@ -39,6 +41,9 @@ const LoginPage = () => {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
+
+  // Notification hook
+  const { notification, showNotification, hideNotification } = useNotification();
 
   useEffect(() => {
     if (!currentUser) return;
@@ -84,12 +89,17 @@ const LoginPage = () => {
       await handleLogin(formData);
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      showNotification(err.message, 'error');
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 bg-slate-50">
+      <Notification 
+        message={notification.message} 
+        type={notification.type} 
+        onClose={hideNotification} 
+      />
       <div className="bg-white border border-slate-200 rounded-lg p-6 sm:p-10 max-w-md w-full shadow-sm">
         <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-6 text-center">Login</h2>
         {needsVerification && (

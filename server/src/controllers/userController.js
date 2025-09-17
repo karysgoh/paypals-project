@@ -201,6 +201,30 @@ module.exports = {
     next();
   }),
 
+  findUserByEmail: catchAsync(async (req, res, next) => {
+    const { email } = req.body;
+    if (!email) {
+      logger.warn("Find user by email failed: Missing email");
+      return next(new AppError("Missing email", 400));
+    }
+
+    const user = await userModel.findUserByEmail(email);
+    if (user) {
+      logger.debug(`Found user with email: ${email}`);
+      // Return safe user data (no password or sensitive info)
+      const safeUser = {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email,
+        email_verified: user.email_verified
+      };
+      res.status(200).json({ status: "success", data: safeUser });
+    } else {
+      logger.debug(`No user found with email: ${email}`);
+      res.status(200).json({ status: "success", data: null });
+    }
+  }),
+
   readLoggedInUser: catchAsync(async (req, res, next) => {
     const user_id = res.locals.user_id;
     if (!user_id) {

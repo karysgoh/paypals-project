@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
+import Notification from "../components/Notification";
+import { useNotification } from "../hooks/useNotification";
 import { 
   Plus, 
   Users, 
@@ -9,7 +11,11 @@ import {
   DollarSign, 
   Clock3,
   MoreHorizontal,
-  UserPlus
+  UserPlus,
+  X,
+  MapPin,
+  Calendar,
+  CreditCard
 } from "lucide-react";
 
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, ...props }) => {
@@ -127,6 +133,11 @@ export default function Dashboard() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [processingInvitation, setProcessingInvitation] = useState(null);
+  const [showTransactionDetails, setShowTransactionDetails] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+
+  // Notification hook
+  const { notification, showNotification, hideNotification } = useNotification();
 
   const calculateBalancesFromTransactions = useCallback((allTransactions, currentUserId) => {
     if (!allTransactions || !currentUserId) {
@@ -149,20 +160,6 @@ export default function Dashboard() {
     allTransactions.forEach((transaction) => {
       const isCreator = transaction.created_by === currentUserId;
       const members = transaction.members || [];
-
-      // Debug logging
-      console.log('Processing transaction:', {
-        id: transaction.id,
-        name: transaction.name,
-        isCreator,
-        currentUserId,
-        created_by: transaction.created_by,
-        members: members.map(m => ({
-          user_id: m.user_id,
-          payment_status: m.payment_status,
-          amount_owed: m.amount_owed
-        }))
-      });
 
       if (isCreator) {
         // For transactions I created, calculate what others owe me
@@ -362,20 +359,17 @@ export default function Dashboard() {
       if (response.ok) {
         // Remove the accepted invitation from the list
         setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
-        setSuccessMessage('Invitation accepted successfully! Welcome to the circle.');
+        showNotification('Invitation accepted successfully! Welcome to the circle.', 'success');
         
         // Reload dashboard data to reflect new circle membership
         loadDashboardData();
-        
-        // Clear success message after 5 seconds
-        setTimeout(() => setSuccessMessage(''), 5000);
       } else {
         const errorData = await response.json();
-        setErrorMessage(errorData.message || 'Failed to accept invitation');
+        showNotification(errorData.message || 'Failed to accept invitation', 'error');
       }
     } catch (error) {
       console.error('Error accepting invitation:', error);
-      setErrorMessage('An error occurred while accepting the invitation');
+      showNotification('An error occurred while accepting the invitation', 'error');
     } finally {
       setProcessingInvitation(null);
     }
@@ -398,17 +392,14 @@ export default function Dashboard() {
       if (response.ok) {
         // Remove the rejected invitation from the list
         setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
-        setSuccessMessage('Invitation rejected');
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccessMessage(''), 3000);
+        showNotification('Invitation rejected', 'success');
       } else {
         const errorData = await response.json();
-        setErrorMessage(errorData.message || 'Failed to reject invitation');
+        showNotification(errorData.message || 'Failed to reject invitation', 'error');
       }
     } catch (error) {
       console.error('Error rejecting invitation:', error);
-      setErrorMessage('An error occurred while rejecting the invitation');
+      showNotification('An error occurred while rejecting the invitation', 'error');
     } finally {
       setProcessingInvitation(null);
     }
@@ -422,6 +413,16 @@ export default function Dashboard() {
 
   const handleRetry = () => {
     loadDashboardData();
+  };
+
+  const handleShowTransactionDetails = (transaction) => {
+    setSelectedTransaction(transaction);
+    setShowTransactionDetails(true);
+  };
+
+  const handleCloseTransactionDetails = () => {
+    setShowTransactionDetails(false);
+    setSelectedTransaction(null);
   };
 
   const userName = currentUser?.name || currentUser?.username || currentUser?.email?.split('@')[0] || 'there';
@@ -465,6 +466,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Notification 
+        message={notification.message} 
+        type={notification.type} 
+        onClose={hideNotification} 
+      />
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="px-4 sm:px-8 pt-10 sm:pt-12 pb-6 sm:pb-8">
@@ -756,7 +762,11 @@ export default function Dashboard() {
                                 </p>
                               )}
                             </div>
-                            <button className="p-1 hover:bg-slate-100 rounded" aria-label="More transaction options">
+                            <button 
+                              className="p-1 hover:bg-slate-100 rounded" 
+                              aria-label="View transaction details"
+                              onClick={() => handleShowTransactionDetails(transaction)}
+                            >
                               <MoreHorizontal className="w-4 h-4 text-slate-400" />
                             </button>
                           </div>
@@ -999,6 +1009,167 @@ export default function Dashboard() {
                 ))
               ) : (
                 <p className="text-slate-500 text-center py-4">You don't owe anyone money right now</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Details Modal */}
+      {showTransactionDetails && selectedTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-xl font-semibold text-slate-900">Transaction Details</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleCloseTransactionDetails}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Transaction Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    selectedTransaction.user_payment_status === 'paid' || selectedTransaction.payment_status === 'paid' 
+                      ? 'bg-green-100' : 'bg-slate-100'
+                  }`}>
+                    <DollarSign className={`w-6 h-6 ${
+                      selectedTransaction.user_payment_status === 'paid' || selectedTransaction.payment_status === 'paid' 
+                        ? 'text-green-600' : 'text-slate-600'
+                    }`} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-slate-900">
+                      {selectedTransaction.description || selectedTransaction.name || 'Transaction'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {selectedTransaction.circle?.name || 'Unknown Circle'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-semibold text-slate-900">
+                    ${(parseFloat(selectedTransaction.total_amount || selectedTransaction.amount || '0') || 0).toFixed(2)}
+                  </p>
+                  <Badge 
+                    variant={
+                      selectedTransaction.user_payment_status === 'paid' || selectedTransaction.payment_status === 'paid' 
+                        ? 'green' : 'red'
+                    }
+                    className="text-xs"
+                  >
+                    {selectedTransaction.user_payment_status === 'paid' || selectedTransaction.payment_status === 'paid' 
+                      ? 'Paid' : 'Pending'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Transaction Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-600">Created:</span>
+                    <span className="text-slate-900">
+                      {new Date(selectedTransaction.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm">
+                    <Users className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-600">Created by:</span>
+                    <span className="text-slate-900">
+                      {selectedTransaction.created_by === currentUser?.user_id ? 'You' : 
+                       selectedTransaction.creator?.username || selectedTransaction.creator?.email || 'Unknown User'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <CreditCard className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-600">Category:</span>
+                    <span className="text-slate-900 capitalize">
+                      {selectedTransaction.category || 'Not specified'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {selectedTransaction.user_amount_owed && selectedTransaction.created_by !== currentUser?.user_id && (
+                    <div className="bg-slate-50 p-3 rounded-lg">
+                      <p className="text-sm text-slate-600 mb-1">Your share:</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        ${parseFloat(selectedTransaction.user_amount_owed).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+
+                  {(selectedTransaction.location_name || selectedTransaction.formatted_address) && (
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
+                      <div>
+                        <span className="text-slate-600">Location:</span>
+                        <p className="text-slate-900">
+                          {selectedTransaction.location_name || selectedTransaction.formatted_address}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedTransaction.description && selectedTransaction.description !== selectedTransaction.name && (
+                <div>
+                  <h4 className="text-sm font-medium text-slate-900 mb-2">Description</h4>
+                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
+                    {selectedTransaction.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Members/Participants */}
+              {selectedTransaction.members && selectedTransaction.members.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-slate-900 mb-3">Participants</h4>
+                  <div className="space-y-2">
+                    {selectedTransaction.members.map((member, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                            <Users className="w-4 h-4 text-slate-600" />
+                          </div>
+                          <span className="text-sm text-slate-900">
+                            {member.user_id === currentUser?.user_id ? 'You' : 
+                             member.user?.username || member.user?.email || 'Unknown User'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-slate-900">
+                            ${parseFloat(member.amount_owed || 0).toFixed(2)}
+                          </p>
+                          <Badge 
+                            variant={member.payment_status === 'paid' ? 'green' : 'red'}
+                            className="text-xs"
+                          >
+                            {member.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>
