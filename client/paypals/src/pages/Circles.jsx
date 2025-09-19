@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import Notification from "../components/Notification";
 import { useNotification } from "../hooks/useNotification";
 import { 
@@ -8,7 +9,8 @@ import {
   UserPlus,
   Calendar,
   Clock,
-  ArrowRight
+  ArrowRight,
+  ArrowLeft
 } from "lucide-react";
 
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, disabled, ...props }) => {
@@ -225,11 +227,20 @@ export default function Circles() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">My Circles</h1>
-            <p className="text-lg text-slate-600">
-              Manage your friend groups and shared expenses
-            </p>
+          <div className="space-y-4">
+            <Link 
+              to="/dashboard" 
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors duration-200 group"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" />
+              Back to Dashboard
+            </Link>
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900 mb-2">My Circles</h1>
+              <p className="text-lg text-slate-600">
+                Manage your friend groups and shared expenses
+              </p>
+            </div>
           </div>
           <Button 
             variant="primary" 

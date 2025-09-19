@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
-import { useNavigate, useParams } from "react-router-dom";
-import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus, Search, Mail, User } from "lucide-react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { Users, Clock, DollarSign, X, MapPin, Navigation, Target, Edit, Trash, UserMinus, UserPlus, Search, Mail, User, ArrowLeft } from "lucide-react";
 import Notification from "../components/Notification";
 import { useNotification } from "../hooks/useNotification";
 
@@ -790,9 +790,18 @@ export default function CircleDetail() {
       />
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Circles</h1>
-            <p className="text-sm text-slate-600">Select a circle to view members and transactions</p>
+          <div className="space-y-4">
+            <Link 
+              to="/circles" 
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors duration-200 group"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" />
+              Back to Circles
+            </Link>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Circles</h1>
+              <p className="text-sm text-slate-600">Select a circle to view members and transactions</p>
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <select
@@ -839,10 +848,14 @@ export default function CircleDetail() {
           </div>
         ) : !circle ? (
           <div className="text-center py-12">
-            <p className="text-slate-600">Circle not found</p>
-            <Button className="mt-4" onClick={() => navigate('/circles')}>
+            <p className="text-slate-600 mb-4">Circle not found</p>
+            <Link 
+              to="/circles" 
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors duration-200 group"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" />
               Back to Circles
-            </Button>
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

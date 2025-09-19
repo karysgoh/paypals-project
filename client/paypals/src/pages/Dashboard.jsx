@@ -208,7 +208,12 @@ export default function Dashboard() {
     });
 
     const totalTransactions = allTransactions.length;
-    const pendingCount = owedToDetails.length + owesDetails.length;
+    // Count unique transactions with pending status, not individual memberships
+    const pendingTransactions = allTransactions.filter(transaction => 
+      transaction.status === 'pending' || 
+      (transaction.members && transaction.members.some(member => member.payment_status === 'pending'))
+    );
+    const pendingCount = pendingTransactions.length;
 
     // Group owedToDetails by user
     const groupedOwedTo = owedToDetails.reduce((acc, detail) => {
@@ -323,22 +328,33 @@ export default function Dashboard() {
     if (!currentUser) return;
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/invitations/pending`, {
+      const response = await fetch(`http://localhost:3000/api/invitations/my`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (response.ok) {
         const data = await response.json();
-        setInvitations(data.data || []);
+        // Filter for pending invitations only
+        const pendingInvitations = (data.data || []).filter(invitation => 
+          invitation.status === 'pending'
+        );
+        setInvitations(pendingInvitations);
+      } else if (response.status === 401) {
+        console.warn('Authentication required for invitations');
+        // Don't show error to user, just fail silently for invitations
       } else {
-        console.warn('Failed to load invitations:', response.statusText);
+        console.warn('Failed to load invitations:', response.status, response.statusText);
       }
     } catch (error) {
-      console.warn('Error loading invitations:', error);
+      // Check if error is due to HTML response (likely 404 or server error)
+      if (error.message.includes('Unexpected token')) {
+        console.warn('Invitations endpoint not found or returned HTML');
+      } else {
+        console.warn('Error loading invitations:', error);
+      }
     }
   }, [currentUser]);
 
@@ -347,13 +363,12 @@ export default function Dashboard() {
       setProcessingInvitation(invitationId);
       setErrorMessage('');
       
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/invitations/${invitationId}/accept`, {
+      const response = await fetch(`http://localhost:3000/api/invitations/${invitationId}/accept`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -380,13 +395,12 @@ export default function Dashboard() {
       setProcessingInvitation(invitationId);
       setErrorMessage('');
       
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/invitations/${invitationId}/reject`, {
+      const response = await fetch(`http://localhost:3000/api/invitations/${invitationId}/reject`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -694,8 +708,30 @@ export default function Dashboard() {
             {/* Recent Activity */}
             <div className="lg:col-span-2">
               <div className="mb-4">
-                <h2 className="text-xl font-medium text-slate-900">Recent Activity</h2>
-                <p className="text-base text-slate-500">Your latest transactions</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-medium text-slate-900">Recent Activity</h2>
+                    <p className="text-base text-slate-500">Your latest transactions</p>
+                  </div>
+                  <div className="text-right">
+                    {balances.totalTransactions > transactions.length && (
+                      <p className="text-sm text-slate-600">
+                        Showing {transactions.length} of {balances.totalTransactions} transactions
+                      </p>
+                    )}
+                    {balances.pendingCount > 0 && (
+                      <p className="text-xs text-amber-600 mb-1">
+                        {balances.pendingCount} pending transactions
+                      </p>
+                    )}
+                    <Link 
+                      to="/transactions" 
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      View all transactions →
+                    </Link>
+                  </div>
+                </div>
               </div>
 
               <Card>
