@@ -219,14 +219,14 @@ export default function Tutorial() {
       route: '/',
       selector: 'button[aria-label="start-splitting"]',
       title: 'Start Your Journey',
-      description: 'Click here to register and create your first circle for splitting expenses with friends.',
+      description: 'Click here to register and create your first circle for splitting transactions with friends.',
       fallback: 'Navigate to the homepage to get started with creating circles.'
     },
     {
       id: 'complete',
       route: '/',
       title: 'You\'re All Set!',
-      description: 'Sign up to start creating circles and splitting expenses with friends. The app will guide you through the process once you\'re registered!'
+      description: 'Sign up to start creating circles and splitting transactions with friends. The app will guide you through the process once you\'re registered!'
     }
   ];
 
@@ -243,16 +243,16 @@ export default function Tutorial() {
       route: '/circles',
       selector: '[data-tour="create-circle"]',
       title: 'Create Your First Circle',
-      description: 'Click here to create a new circle and start splitting expenses with friends or family.',
-      fallback: 'This is where you can create new circles to manage shared expenses.'
+      description: 'Click here to create a new circle and start splitting transactions with friends or family.',
+      fallback: 'This is where you can create new circles to manage shared transactions.'
     },
     {
-      id: 'expense-management',
-      route: '/circles/1',
+      id: 'transaction-management',
+      route: '/circles/sample',
       selector: '[data-tour="create-transaction"]',
-      title: 'Add & Manage Expenses',
-      description: 'Once in a circle, you can add expenses, split them among members, and track who owes what. Click here to add your first transaction.',
-      fallback: 'This is where you manage expenses within a circle - add new transactions, view transaction history, and see individual balances.'
+      title: 'Add & Manage Transactions',
+      description: 'Once in a circle, you can add transactions, split them among members, and track who owes what. Click here to add your first transaction.',
+      fallback: 'This is where you manage transactions within a circle - add new transactions, view transaction history, and see individual balances.'
     },
     {
       id: 'dashboard-balance',
@@ -260,13 +260,13 @@ export default function Tutorial() {
       selector: '[data-tour="balance-card"]',
       title: 'Your Financial Overview',
       description: 'See at a glance what you owe and what others owe you across all your circles.',
-      fallback: 'Your dashboard shows a complete overview of your shared expenses and balances.'
+      fallback: 'Your dashboard shows a complete overview of your shared transactions and balances.'
     },
     {
       id: 'complete',
       route: '/dashboard',
       title: 'You\'re All Set!',
-      description: 'That\'s the basics! You can now create circles, add transactions, and split expenses with ease.'
+      description: 'That\'s the basics! You can now create circles, add transactions, and split transactions with ease.'
     }
   ];
 
@@ -561,7 +561,7 @@ export default function Tutorial() {
                 Welcome to PayPals
               </h1>
               <p className="text-base sm:text-xl text-slate-600 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto">
-                Let's take a quick tour of the features that make splitting expenses simple and fair.
+                Let's take a quick tour of the features that make splitting transactions simple and fair.
               </p>
               
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 sm:mb-16">
@@ -585,17 +585,17 @@ export default function Tutorial() {
                 <FeatureCard
                   icon={Users}
                   title="Create Circles"
-                  description="Set up groups for different expense categories - roommates, trip buddies, or dinner crews."
+                  description="Set up groups for different transaction categories - roommates, trip buddies, or dinner crews."
                 />
                 <FeatureCard
                   icon={Receipt}
-                  title="Split Expenses"
+                  title="Split Transactions"
                   description="Add transactions and divide costs fairly. Take photos of receipts for reference."
                 />
                 <FeatureCard
                   icon={BarChart3}
                   title="Track Balances"
-                  description="See who owes what at a glance. Keep track of all your shared expenses."
+                  description="See who owes what at a glance. Keep track of all your shared transactions."
                 />
               </div>
 

@@ -21,13 +21,16 @@ const Button = ({ children, variant = "default", size = "default", className = "
     primary: "bg-slate-900 text-white hover:bg-slate-800",
     secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
     outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    destructive: "bg-red-600 text-white hover:bg-red-700"
   };
   
   const sizes = {
     default: "h-10 px-6 py-2",
     sm: "h-8 px-3 text-xs",
-    lg: "h-12 px-8 text-base"
+    lg: "h-12 px-8 text-base",
+    icon: "h-10 w-10",
+    "icon-sm": "h-8 w-8"
   };
 
   return (
@@ -42,8 +45,8 @@ const Button = ({ children, variant = "default", size = "default", className = "
   );
 };
 
-const Card = ({ children, className = "", ...props }) => (
-  <div className={`bg-white border border-slate-200 rounded-lg shadow-sm ${className}`} {...props}>
+const Card = ({ children, className = "" }) => (
+  <div className={`rounded-lg border border-slate-200 bg-white p-6 shadow-sm ${className}`}>
     {children}
   </div>
 );
@@ -224,7 +227,7 @@ export default function Circles() {
         type={notification.type} 
         onClose={hideNotification} 
       />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
           <div className="space-y-4">
@@ -238,7 +241,7 @@ export default function Circles() {
             <div>
               <h1 className="text-4xl font-bold text-slate-900 mb-2">My Circles</h1>
               <p className="text-lg text-slate-600">
-                Manage your friend groups and shared expenses
+                Manage your friend groups and shared transactions
               </p>
             </div>
           </div>
@@ -257,7 +260,7 @@ export default function Circles() {
         {/* Create Circle Modal */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md sm:max-w-lg p-4 sm:p-6 relative">
+            <Card className="w-full max-w-md sm:max-w-lg relative">
               <button
                 onClick={() => {
                   setShowCreateForm(false);
@@ -360,7 +363,7 @@ export default function Circles() {
             <h2 className="text-2xl font-semibold text-slate-900 mb-6">Pending Invitations</h2>
             <div className="space-y-4">
               {invitations.map(invite => (
-                <Card key={invite.id} className="p-6">
+                <Card key={invite.id}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -398,6 +401,43 @@ export default function Circles() {
           </div>
         )}
 
+        {/* Summary Stats */}
+        {circles.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <div className="flex items-center">
+                <Users className="h-8 w-8 text-blue-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-slate-600">Total Circles</p>
+                  <p className="text-2xl font-bold text-slate-900">{circles.length}</p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card>
+              <div className="flex items-center">
+                <Users className="h-8 w-8 text-green-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-slate-600">Total Members</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {circles.reduce((sum, circle) => sum + (circle.memberCount || 0), 0)}
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card>
+              <div className="flex items-center">
+                <Clock className="h-8 w-8 text-purple-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-slate-600">Active Circles</p>
+                  <p className="text-2xl font-bold text-slate-900">{circles.length}</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Circles Grid */}
         {circles.length === 0 ? (
           <div className="text-center py-16">
@@ -408,7 +448,7 @@ export default function Circles() {
               No circles yet
             </h3>
             <p className="text-lg text-slate-600 mb-8 max-w-md mx-auto">
-              Create your first circle to start splitting expenses with friends, 
+              Create your first circle to start splitting transactions with friends, 
               or join an existing circle with an invite code.
             </p>
             <Button 
@@ -424,7 +464,7 @@ export default function Circles() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {circles.map((circle) => (
-              <Card key={circle.id} className="p-6 hover:shadow-md transition-shadow">
+              <Card key={circle.id} className="hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-xl">

@@ -494,14 +494,14 @@ export default function Dashboard() {
                 Welcome back, {userName}
               </h1>
         <p className="text-base sm:text-lg text-slate-600">
-                Here's what's happening with your expenses
+                Here's what's happening with your transactions
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <Link to={createPageUrl("expense")} className="w-full sm:w-auto">
+              <Link to={createPageUrl("transactions")} className="w-full sm:w-auto">
                 <Button variant="primary" size="md" className="w-full sm:w-auto">
                   <Plus className="w-5 h-5 mr-1.5" />
-                  Add Expense
+                  Add Transaction
                 </Button>
               </Link>
               <Link to={createPageUrl("circles")} className="w-full sm:w-auto">
@@ -742,7 +742,7 @@ export default function Dashboard() {
                         <DollarSign className="w-7 h-7 text-slate-400" />
                       </div>
                       <p className="text-base text-slate-600 font-medium mb-1">No recent activity</p>
-                      <p className="text-sm text-slate-500">Start by adding your first expense</p>
+                      <p className="text-sm text-slate-500">Start by adding your first transaction</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">

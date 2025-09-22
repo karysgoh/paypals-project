@@ -77,12 +77,12 @@ function LandingPage() {
       <section className="pt-12 pb-12 sm:pt-20 sm:pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 mb-4 sm:mb-6 leading-tight">
-            Split expenses with friends,
+            Split transactions with friends,
             <br />
             <span className="text-slate-600">the smart way</span>
           </h1>
           <p className="text-base sm:text-xl text-slate-600 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto">
-            Keep track of shared expenses and settle up with friends easily. 
+            Keep track of shared transactions and settle up with friends easily. 
             No more awkward money conversations or forgotten IOUs.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -125,7 +125,7 @@ function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              Everything you need to split expenses
+              Everything you need to split transactions
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
               Simple tools that make sharing costs with friends, roommates, and groups effortless.
@@ -136,12 +136,12 @@ function LandingPage() {
             <FeatureCard
               icon={Users}
               title="Create Circles"
-              description="Organize expenses by groups - roommates, trip buddies, dinner crews. Keep everything separate and organized."
+              description="Organize transactions by groups - roommates, trip buddies, dinner crews. Keep everything separate and organized."
             />
             <FeatureCard
               icon={Receipt}
-              title="Track Expenses"
-              description="Add expenses instantly and split them fairly. Take photos of receipts and let everyone know what they owe."
+              title="Track Transactions"
+              description="Add transactions instantly and split them fairly. Take photos of receipts and let everyone know what they owe."
             />
             <FeatureCard
               icon={Calculator}
@@ -151,7 +151,7 @@ function LandingPage() {
             <FeatureCard
               icon={Smartphone}
               title="Mobile Friendly"
-              description="Split expenses on the go. Our web app works perfectly on any device, anytime, anywhere."
+              description="Split transactions on the go. Our web app works perfectly on any device, anytime, anywhere."
             />
             <FeatureCard
               icon={CheckCircle}
@@ -182,8 +182,8 @@ function LandingPage() {
             />
             <StepCard
               number="2"
-              title="Add Expenses"
-              description="Add any shared expense and choose how to split it. Take a photo of the receipt for reference."
+              title="Add Transactions"
+              description="Add any shared transaction and choose how to split it. Take a photo of the receipt for reference."
             />
             <StepCard
               number="3"
@@ -201,7 +201,7 @@ function LandingPage() {
             Ready to split smarter?
           </h2>
           <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">
-            Join thousands of people who've simplified their shared expenses. 
+            Join thousands of people who've simplified their shared transactions. 
             Start tracking and splitting costs with your friends today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

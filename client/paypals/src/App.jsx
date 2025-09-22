@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import Circles from "./pages/Circles";
 import CircleDetail from "./pages/CircleDetail";
+import SampleCircle from "./pages/SampleCircle";
 import AllTransactions from "./pages/AllTransactions";
 import LandingPage from "./pages/LandingPage";
 import NavBar from "./components/NavBar";
@@ -50,6 +51,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/circles" element={<Circles />} />
               <Route path="/circles/:id" element={<CircleDetail />} />
+              <Route path="/circles/sample" element={<SampleCircle />} />
               <Route path="/transactions" element={<AllTransactions />} />
             </Route>
           </Route>
