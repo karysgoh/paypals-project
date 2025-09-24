@@ -1528,6 +1528,14 @@ export default function CircleDetail() {
                           <div className="text-right">
                             <div className="text-sm font-semibold text-slate-900">${(parseFloat(tx.total_amount || tx.amount || 0) || 0).toFixed(2)}</div>
                             {tx.is_user_participant && <div className="text-xs text-green-600">Involving you</div>}
+                            {tx.is_user_participant && tx.user_payment_status !== 'paid' && (
+                              <Link 
+                                to={`/transaction/${tx.id}/pay`}
+                                className="inline-flex items-center gap-1 mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                💳 Pay Now
+                              </Link>
+                            )}
                           </div>
                         </div>
                         {(tx.members || []).length > 0 && (
@@ -1544,7 +1552,8 @@ export default function CircleDetail() {
                                   (m.user_id || m.id) ||
                                   `member-${idx}`;
                                 const amt = parseFloat(m.amount_owed ?? m.amount_paid ?? m.amount ?? 0) || 0;
-                                const key = `${tx.id}-${m.user_id || m.id || idx}`;
+                                // Create a more unique key using transaction ID, member ID/user_id, external email, and index
+                                const key = `${tx.id}-${m.user_id || m.id || 'ext'}-${m.external_email || 'int'}-${idx}`;
                                 return (
                                   <div key={key} className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-700">
                                     <span className="font-medium">{memberName}</span>

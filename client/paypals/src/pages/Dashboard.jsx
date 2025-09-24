@@ -1145,9 +1145,27 @@ export default function Dashboard() {
                   {selectedTransaction.user_amount_owed && selectedTransaction.created_by !== currentUser?.user_id && (
                     <div className="bg-slate-50 p-3 rounded-lg">
                       <p className="text-sm text-slate-600 mb-1">Your share:</p>
-                      <p className="text-lg font-semibold text-slate-900">
+                      <p className="text-lg font-semibold text-slate-900 mb-3">
                         ${parseFloat(selectedTransaction.user_amount_owed).toFixed(2)}
                       </p>
+                      
+                      {/* Pay Now Button */}
+                      {(selectedTransaction.user_payment_status === 'unpaid' || selectedTransaction.user_payment_status === 'pending' || !selectedTransaction.user_payment_status) && (
+                        <Link 
+                          to={`/transaction/${selectedTransaction.id}/pay`}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          Pay Now
+                        </Link>
+                      )}
+                      
+                      {selectedTransaction.user_payment_status === 'paid' && (
+                        <div className="inline-flex items-center gap-2 text-green-700 text-sm font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          Payment Complete
+                        </div>
+                      )}
                     </div>
                   )}
 

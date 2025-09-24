@@ -61,9 +61,20 @@ module.exports = {
 
   // Verify access token and attempt refresh if invalid or missing
   verifyAccessToken: (req, res, next) => {
-    const accessToken = req.cookies?.authToken;
+    // Check for token in cookies first, then Authorization header
+    let accessToken = req.cookies?.authToken;
     const refreshToken = req.cookies?.refreshToken;
-    console.log("Received cookies: "+{accessToken, refreshToken});
+    
+    // If no cookie token, check Authorization header
+    if (!accessToken) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        accessToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+      }
+    }
+    
+    console.log("Received cookies: "+JSON.stringify({accessToken: !!accessToken, refreshToken: !!refreshToken}));
+    console.log("Authorization header:", !!req.headers.authorization);
 
     // Helper function to verify refresh token and issue new access token
     const tryRefreshToken = () => {
@@ -114,7 +125,12 @@ module.exports = {
     };
 
     if (!accessToken) {
-      console.log('No access token found, attempting refresh');
+      console.log('No access token found in cookies or Authorization header');
+      // If there's no refresh token either, return unauthorized
+      if (!refreshToken) {
+        return res.status(401).json({ error: 'No access token or refresh token found' });
+      }
+      console.log('Attempting refresh with cookie refresh token');
       return tryRefreshToken();
     }
 
