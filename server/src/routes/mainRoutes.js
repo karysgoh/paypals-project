@@ -119,6 +119,13 @@ const invitationRoutes = require('../routes/invitationRoutes.js');
 router.use('/invitations', invitationRoutes);
 
 const transactionRoutes = require('../routes/transactionRoutes.js');
+const transactionController = require('../controllers/transactionController.js');
+
+// External transaction routes (NO AUTH REQUIRED)
+router.get('/transactions/external/:token', transactionController.getExternalTransaction);
+router.patch('/transactions/external/:token/payment', transactionController.updateExternalPaymentStatus);
+
+// Regular transaction routes (AUTH REQUIRED)
 router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
 
 const mapsRoutes = require('../routes/mapsRoutes.js');

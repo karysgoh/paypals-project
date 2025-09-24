@@ -15,6 +15,7 @@ import LandingPage from "./pages/LandingPage";
 import NavBar from "./components/NavBar";
 import VerifyEmail from "./pages/VerifyEmail";
 import Tutorial from "./pages/Tutorial";
+import ExternalTransaction from "./pages/ExternalTransaction";
 
 // ProtectedRoute component to handle authentication checks
 const ProtectedRoute = () => {
@@ -47,6 +48,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/external/transaction/:token" element={<ExternalTransaction />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/circles" element={<Circles />} />

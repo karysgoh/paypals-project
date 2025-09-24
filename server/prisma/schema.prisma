@@ -250,21 +250,32 @@ model Transaction {
 }
 
 model TransactionMember {
+  id                  Int           @id @default(autoincrement())
   transaction_id      Int
-  user_id             Int
+  user_id             Int?          
   amount_owed         Decimal       @db.Decimal(14, 2)
   payment_status      PaymentStatus @default(unpaid)
   payment_method      PaymentMethod?
   external_payment_id String?
   paid_at             DateTime?
+  
+  // External participant fields
+  external_email      String?       
+  external_name       String?       
+  access_token        String?       
+  access_token_expires DateTime?    
+  is_external         Boolean       @default(false)
 
   transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@id([transaction_id, user_id])
   @@map("transaction_members")
   @@index([user_id])
+  @@index([external_email])
+  @@index([access_token])
   @@index([payment_status])
+  @@index([is_external])
+  @@unique([transaction_id, user_id, external_email], name: "unique_participant")
 }
   
 // ======================================

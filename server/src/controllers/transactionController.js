@@ -46,6 +46,9 @@ const formatTransactionResponse = (transaction) => ({
         user_id: member.user_id,
         amount_owed: member.amount_owed,
         payment_status: member.payment_status,
+        external_name: member.external_name, // Include external participant name
+        external_email: member.external_email, // Include external participant email
+        is_external: member.is_external, // Include external participant flag
         user: member.user ? {
             id: member.user.id,
             username: member.user.username,
@@ -81,8 +84,28 @@ module.exports = {
             }
 
             for (const participant of transactionData.participants) {
-                if (!participant.user_id || participant.amount_owed === undefined || participant.amount_owed < 0) {
-                    return next(new AppError('Each participant must have a valid user_id and non-negative amount_owed', 400));
+                // Validate that each participant has either user_id OR external_email
+                const hasUserId = participant.user_id !== undefined && participant.user_id !== null;
+                const hasExternalEmail = participant.external_email && participant.external_email.trim() !== '';
+                
+                if (!hasUserId && !hasExternalEmail) {
+                    return next(new AppError('Each participant must have either user_id or external_email', 400));
+                }
+                
+                if (hasUserId && hasExternalEmail) {
+                    return next(new AppError('Participant cannot have both user_id and external_email', 400));
+                }
+                
+                if (participant.amount_owed === undefined || participant.amount_owed < 0) {
+                    return next(new AppError('Each participant must have a non-negative amount_owed', 400));
+                }
+                
+                // Validate external email format if provided
+                if (hasExternalEmail) {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(participant.external_email)) {
+                        return next(new AppError('Invalid email format for external participant', 400));
+                    }
                 }
             }
 
@@ -409,6 +432,83 @@ module.exports = {
             });
         } catch (error) {
             logger.error(`Error getting user transactions: ${error}`);
+            const mapped = mapTransactionError(error);
+            return next(new AppError(mapped.message, mapped.status));
+        }
+    }),
+
+    // External participant functions
+    getExternalTransaction: catchAsync(async (req, res, next) => {
+        try {
+            const { token } = req.params;
+            
+            logger.info(`External transaction request for token: ${token?.substring(0, 10)}...`);
+
+            if (!token) {
+                return next(new AppError('Access token is required', 400));
+            }
+
+            const result = await transactionModel.getTransactionByAccessToken(token);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Transaction retrieved successfully',
+                data: result
+            });
+
+        } catch (error) {
+            logger.error(`Error getting external transaction: ${error}`);
+            if (error.message.includes('Invalid or expired')) {
+                return next(new AppError('Invalid or expired access token', 401));
+            }
+            return next(new AppError('Internal server error', 500));
+        }
+    }),
+
+    updateExternalPaymentStatus: catchAsync(async (req, res, next) => {
+        try {
+            const { token } = req.params;
+            const { payment_status, payment_method, external_payment_id } = req.body;
+
+            if (!token) {
+                return next(new AppError('Access token is required', 400));
+            }
+
+            if (!payment_status) {
+                return next(new AppError('Payment status is required', 400));
+            }
+
+            const validStatuses = ['unpaid', 'paid', 'pending', 'failed'];
+            if (!validStatuses.includes(payment_status)) {
+                return next(new AppError(`Payment status must be one of: ${validStatuses.join(', ')}`, 400));
+            }
+
+            const result = await transactionModel.updateExternalParticipantPaymentStatus(
+                token,
+                payment_status,
+                payment_method,
+                external_payment_id
+            );
+
+            logger.info('External payment status updated successfully', { 
+                token: token.substring(0, 8) + '...', // Log partial token for security
+                payment_status 
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: result.message,
+                data: {
+                    payment_status,
+                    updated_at: new Date()
+                }
+            });
+
+        } catch (error) {
+            logger.error(`Error updating external payment status: ${error}`);
+            if (error.message.includes('Invalid or expired')) {
+                return next(new AppError('Invalid or expired access token', 401));
+            }
             const mapped = mapTransactionError(error);
             return next(new AppError(mapped.message, mapped.status));
         }

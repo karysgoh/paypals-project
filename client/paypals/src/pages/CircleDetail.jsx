@@ -81,6 +81,7 @@ export default function CircleDetail() {
     total_amount: '',
     splitEven: true,
     participants: [],
+    external_participants: [],
     place_id: '',
     location_lat: '',
     location_lng: '',
@@ -630,6 +631,54 @@ export default function CircleDetail() {
     }));
   };
 
+  // External participant helper functions
+  const addExternalParticipant = () => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: [...f.external_participants, { 
+        id: Date.now(), // temp ID for React key
+        email: '', 
+        name: '', 
+        amount_owed: 0, 
+        include: true 
+      }]
+    }));
+  };
+
+  const removeExternalParticipant = (id) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.filter(p => p.id !== id)
+    }));
+  };
+
+  const updateExternalParticipant = (id, field, value) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, [field]: value } : p
+      )
+    }));
+  };
+
+  const updateExternalParticipantInclude = (id, include) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, include } : p
+      )
+    }));
+  };
+
+  const updateExternalParticipantAmount = (id, amount) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p
+      )
+    }));
+  };
+
   const handleCreateTransaction = async (e) => {
     e.preventDefault();
     setTxError(null);
@@ -638,7 +687,11 @@ export default function CircleDetail() {
     if (!txForm.name || !total || total <= 0) return setTxError('Please provide a name and a valid total amount');
 
     const included = txForm.participants.filter(p => p.include);
-    if (included.length === 0) return setTxError('Select at least one participant');
+    const external = txForm.external_participants.filter(p => p.include);
+    
+    if (included.length === 0 && external.length === 0) {
+      return setTxError('Select at least one participant');
+    }
 
     if (currentUser) {
       const creatorIncluded = included.some(p => p.user_id === currentUser.user_id);
@@ -646,18 +699,56 @@ export default function CircleDetail() {
     }
 
     let participantsPayload = [];
+    const totalParticipants = included.length + external.length;
+    
     if (txForm.splitEven) {
-      const share = parseFloat((total / included.length).toFixed(2));
+      const share = parseFloat((total / totalParticipants).toFixed(2));
       let running = 0;
+      
+      // Add circle member participants
       included.forEach((p, idx) => {
-        const amount = idx === included.length - 1 ? parseFloat((total - running).toFixed(2)) : share;
+        const amount = idx === totalParticipants - 1 && external.length === 0 
+          ? parseFloat((total - running).toFixed(2)) 
+          : share;
         running += amount;
         participantsPayload.push({ user_id: p.user_id, amount_owed: amount });
       });
+      
+      // Add external participants
+      external.forEach((p, idx) => {
+        const isLast = idx === external.length - 1;
+        const amount = isLast ? parseFloat((total - running).toFixed(2)) : share;
+        running += amount;
+        participantsPayload.push({ 
+          external_email: p.email, 
+          external_name: p.name || p.email.split('@')[0], 
+          amount_owed: amount 
+        });
+      });
     } else {
-      const sum = included.reduce((s, p) => s + (p.amount_owed || 0), 0);
-      if (Math.abs(sum - total) > 0.01) return setTxError('Sum of participant amounts must equal total amount');
-      participantsPayload = included.map(p => ({ user_id: p.user_id, amount_owed: p.amount_owed }));
+      // Manual amounts - validate total
+      const internalSum = included.reduce((s, p) => s + (p.amount_owed || 0), 0);
+      const externalSum = external.reduce((s, p) => s + (p.amount_owed || 0), 0);
+      const totalSum = internalSum + externalSum;
+      
+      if (Math.abs(totalSum - total) > 0.01) {
+        return setTxError('Sum of participant amounts must equal total amount');
+      }
+      
+      // Add circle member participants
+      participantsPayload = included.map(p => ({ 
+        user_id: p.user_id, 
+        amount_owed: p.amount_owed 
+      }));
+      
+      // Add external participants
+      external.forEach(p => {
+        participantsPayload.push({ 
+          external_email: p.email, 
+          external_name: p.name || p.email.split('@')[0], 
+          amount_owed: p.amount_owed 
+        });
+      });
     }
 
     const payload = {
@@ -695,6 +786,7 @@ export default function CircleDetail() {
         total_amount: '',
         splitEven: true,
         participants: txForm.participants.map(p => ({ ...p, amount_owed: 0, include: true })),
+        external_participants: [],
         place_id: '',
         location_lat: '',
         location_lng: '',
@@ -1444,6 +1536,7 @@ export default function CircleDetail() {
                             <div className="flex flex-wrap gap-2">
                               {(tx.members || []).map((m, idx) => {
                                 const memberName =
+                                  m.external_name ||  // External participant name
                                   m.user?.username ||
                                   m.username ||
                                   m.name ||
@@ -1993,6 +2086,90 @@ export default function CircleDetail() {
                         {!txForm.splitEven && (
                           <div className="text-xs text-slate-600 bg-yellow-50 border border-yellow-200 rounded-md p-3">
                             <strong>Note:</strong> When not splitting evenly, the sum of all participant amounts must equal the total amount.
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* External Participants Section */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+                            <Mail className="w-5 h-5" />
+                            External Participants
+                          </h4>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addExternalParticipant}
+                          >
+                            <UserPlus className="w-4 h-4 mr-1" />
+                            Add External
+                          </Button>
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          Add people who aren't in your circle. They'll receive email invites to view and pay their portion.
+                        </div>
+                        
+                        {txForm.external_participants.length > 0 && (
+                          <div className="space-y-3 max-h-60 overflow-auto border border-slate-200 rounded-md p-4 bg-slate-50">
+                            {txForm.external_participants.map(p => (
+                              <div key={p.id} className="flex items-center gap-4 p-3 bg-white rounded-md border border-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={p.include}
+                                  onChange={e => updateExternalParticipantInclude(p.id, e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                  <input
+                                    type="email"
+                                    value={p.email}
+                                    onChange={e => updateExternalParticipant(p.id, 'email', e.target.value)}
+                                    placeholder="email@example.com"
+                                    className="text-sm px-2 py-1 border border-slate-300 rounded"
+                                    required={p.include}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={p.name}
+                                    onChange={e => updateExternalParticipant(p.id, 'name', e.target.value)}
+                                    placeholder="Name (optional)"
+                                    className="text-sm px-2 py-1 border border-slate-300 rounded"
+                                  />
+                                </div>
+                                {!txForm.splitEven && p.include && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-slate-600">$</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={p.amount_owed}
+                                      onChange={e => updateExternalParticipantAmount(p.id, e.target.value)}
+                                      className="w-20 text-sm px-2 py-1 border border-slate-300 rounded"
+                                    />
+                                  </div>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeExternalParticipant(p.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {txForm.external_participants.length === 0 && (
+                          <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                            <Mail className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                            <p className="text-sm">No external participants added</p>
+                            <p className="text-xs">Click "Add External" to include people outside your circle</p>
                           </div>
                         )}
                       </div>

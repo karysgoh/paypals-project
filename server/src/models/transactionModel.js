@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const googleMapsService = require('../utils/googleMapsService');
+const { sendExternalTransactionInvite } = require('../utils/emailService');
 
 module.exports = {
     createTransaction: async (circleId, data) => {
@@ -98,37 +99,121 @@ module.exports = {
                     }
                 }
 
-                // Validate that all participants are members of the circle
-                const participantIds = finalParticipants.map(p => p.user_id);
-                const circleMemberIds = circle.members.map(m => m.user_id);
+                // Separate internal and external participants
+                let internalParticipants = [];
+                let externalParticipants = [];
                 
-                const invalidParticipants = participantIds.filter(id => !circleMemberIds.includes(id));
-                if (invalidParticipants.length > 0) {
-                    // Log security violation attempt
-                    await tx.auditLog.create({
-                        data: {
-                            performed_by: data.created_by,
-                            action_type: 'security_violation',
-                            target_entity: 'transaction',
-                            target_id: null, 
-                            description: `Attempted to add non-circle members [${invalidParticipants.join(', ')}] to transaction in circle ${circleId}`
-                        }
-                    });
-                    
-                    const invalidUserIds = invalidParticipants.join(', ');
-                    throw new Error(`Participants with IDs [${invalidUserIds}] are not members of this circle`);
+                for (const participant of finalParticipants) {
+                    if (participant.user_id) {
+                        internalParticipants.push(participant);
+                    } else if (participant.external_email) {
+                        // Generate access token for external participant
+                        const crypto = require('crypto');
+                        const accessToken = crypto.randomBytes(32).toString('hex');
+                        const expiresAt = new Date();
+                        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiration
+                        
+                        externalParticipants.push({
+                            ...participant,
+                            access_token: accessToken,
+                            access_token_expires: expiresAt,
+                            is_external: true
+                        });
+                    } else {
+                        throw new Error('Each participant must have either user_id or external_email');
+                    }
                 }
 
-                const participantsData = finalParticipants.map(p => ({
+                // Validate that all internal participants are members of the circle
+                if (internalParticipants.length > 0) {
+                    const participantIds = internalParticipants.map(p => p.user_id);
+                    const circleMemberIds = circle.members.map(m => m.user_id);
+                    
+                    const invalidParticipants = participantIds.filter(id => !circleMemberIds.includes(id));
+                    if (invalidParticipants.length > 0) {
+                        // Log security violation attempt
+                        await tx.auditLog.create({
+                            data: {
+                                performed_by: data.created_by,
+                                action_type: 'security_violation',
+                                target_entity: 'transaction',
+                                target_id: null, 
+                                description: `Attempted to add non-circle members [${invalidParticipants.join(', ')}] to transaction in circle ${circleId}`
+                            }
+                        });
+                        
+                        const invalidUserIds = invalidParticipants.join(', ');
+                        throw new Error(`Participants with IDs [${invalidUserIds}] are not members of this circle`);
+                    }
+                }
+
+                // Create transaction members for internal participants
+                const internalParticipantsData = internalParticipants.map(p => ({
                     transaction_id: transaction.id,
                     user_id: p.user_id,
                     amount_owed: p.amount_owed,
-                    payment_status: p.payment_status || 'pending'
+                    payment_status: p.payment_status || 'pending',
+                    is_external: false
                 }));
 
-                await tx.transactionMember.createMany({
-                    data: participantsData
-                });
+                // Create transaction members for external participants
+                const externalParticipantsData = externalParticipants.map(p => ({
+                    transaction_id: transaction.id,
+                    user_id: null,
+                    external_email: p.external_email,
+                    external_name: p.external_name || p.external_email.split('@')[0],
+                    amount_owed: p.amount_owed,
+                    payment_status: p.payment_status || 'pending',
+                    access_token: p.access_token,
+                    access_token_expires: p.access_token_expires,
+                    is_external: true
+                }));
+
+                // Insert all participants
+                if (internalParticipantsData.length > 0) {
+                    await tx.transactionMember.createMany({
+                        data: internalParticipantsData
+                    });
+                }
+
+                if (externalParticipantsData.length > 0) {
+                    await tx.transactionMember.createMany({
+                        data: externalParticipantsData
+                    });
+                    
+                    // Send email invites to external participants
+                    const transactionWithDetails = await tx.transaction.findUnique({
+                        where: { id: transaction.id },
+                        include: {
+                            creator: { select: { username: true, email: true } },
+                            circle: { select: { name: true } }
+                        }
+                    });
+                    
+                    // Send emails in parallel (don't await to avoid blocking)
+                    externalParticipantsData.forEach(participant => {
+                        const emailData = {
+                            name: transactionWithDetails.name,
+                            description: transactionWithDetails.description,
+                            category: transactionWithDetails.category,
+                            locationName: transactionWithDetails.location_name,
+                            userAmount: participant.amount_owed.toString(),
+                            totalAmount: transactionWithDetails.total_amount.toString(),
+                            creatorName: transactionWithDetails.creator.username,
+                            circleName: transactionWithDetails.circle.name
+                        };
+                        
+                        sendExternalTransactionInvite(
+                            participant.external_email,
+                            participant.external_name,
+                            emailData,
+                            participant.access_token
+                        ).catch(error => {
+                            console.error(`Failed to send email to ${participant.external_email}:`, error);
+                            // Log but don't fail the transaction
+                        });
+                    });
+                }
 
                 await tx.auditLog.create({
                     data: {
@@ -689,4 +774,155 @@ module.exports = {
             throw error;
         }
     },
+
+    // New functions for external participant support
+    getTransactionByAccessToken: async (accessToken) => {
+        try {
+            const transactionMember = await prisma.transactionMember.findFirst({
+                where: {
+                    access_token: accessToken,
+                    access_token_expires: {
+                        gte: new Date() // Token not expired
+                    },
+                    is_external: true
+                },
+                include: {
+                    transaction: {
+                        include: {
+                            creator: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    email: true
+                                }
+                            },
+                            circle: {
+                                select: {
+                                    id: true,
+                                    name: true
+                                }
+                            },
+                            members: {
+                                include: {
+                                    user: {
+                                        select: {
+                                            id: true,
+                                            username: true,
+                                            email: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!transactionMember) {
+                throw new Error('Invalid or expired access token');
+            }
+
+            return {
+                transaction: transactionMember.transaction,
+                external_participant: {
+                    email: transactionMember.external_email,
+                    name: transactionMember.external_name,
+                    amount_owed: transactionMember.amount_owed,
+                    payment_status: transactionMember.payment_status,
+                    access_token: transactionMember.access_token
+                }
+            };
+        } catch (error) {
+            console.error('Error fetching transaction by access token:', error);
+            throw error;
+        }
+    },
+
+    updateExternalParticipantPaymentStatus: async (accessToken, paymentStatus, paymentMethod = null, externalPaymentId = null) => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // Verify the access token and get transaction member
+                const transactionMember = await tx.transactionMember.findFirst({
+                    where: {
+                        access_token: accessToken,
+                        access_token_expires: {
+                            gte: new Date()
+                        },
+                        is_external: true
+                    },
+                    include: {
+                        transaction: true
+                    }
+                });
+
+                if (!transactionMember) {
+                    throw new Error('Invalid or expired access token');
+                }
+
+                // Validate payment status
+                const validStatuses = ['unpaid', 'paid', 'pending', 'failed'];
+                if (!validStatuses.includes(paymentStatus)) {
+                    throw new Error(`Invalid payment status. Must be one of: ${validStatuses.join(', ')}`);
+                }
+
+                // Update payment status
+                const updatedMember = await tx.transactionMember.update({
+                    where: {
+                        id: transactionMember.id
+                    },
+                    data: {
+                        payment_status: paymentStatus,
+                        payment_method: paymentMethod,
+                        external_payment_id: externalPaymentId,
+                        paid_at: paymentStatus === 'paid' ? new Date() : null
+                    }
+                });
+
+                // Log the status change (use a system user ID or null for external updates)
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: 1, // System user or use null
+                        action_type: 'external_payment_status_update',
+                        target_entity: 'transaction_participant',
+                        target_id: transactionMember.transaction_id,
+                        description: `External participant ${transactionMember.external_email} updated payment status to "${paymentStatus}" for transaction "${transactionMember.transaction.name}"`
+                    }
+                });
+
+                return { 
+                    success: true, 
+                    message: `Payment status updated to ${paymentStatus}`,
+                    participant: updatedMember
+                };
+            });
+
+            return result;
+        } catch (error) {
+            console.error('Error updating external participant payment status:', error);
+            throw error;
+        }
+    },
+
+    getExternalParticipantsByTransaction: async (transactionId) => {
+        try {
+            const externalParticipants = await prisma.transactionMember.findMany({
+                where: {
+                    transaction_id: transactionId,
+                    is_external: true
+                },
+                select: {
+                    external_email: true,
+                    external_name: true,
+                    amount_owed: true,
+                    payment_status: true,
+                    access_token: true
+                }
+            });
+
+            return externalParticipants;
+        } catch (error) {
+            console.error('Error fetching external participants:', error);
+            throw error;
+        }
+    }
 };

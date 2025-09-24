@@ -176,7 +176,7 @@ export default function Dashboard() {
             if (!existingDetail) {
               owedToDetails.push({
                 userId: member.user_id,
-                userName: member.user?.username || member.user?.email || 'Unknown User',
+                userName: member.external_name || member.user?.username || member.user?.email || 'Unknown User',
                 transactionId: transaction.id,
                 transactionName: transaction.name || 'Transaction',
                 amount: amount,
@@ -1188,7 +1188,7 @@ export default function Dashboard() {
                           </div>
                           <span className="text-sm text-slate-900">
                             {member.user_id === currentUser?.user_id ? 'You' : 
-                             member.user?.username || member.user?.email || 'Unknown User'}
+                             member.external_name || member.user?.username || member.user?.email || 'Unknown User'}
                           </span>
                         </div>
                         <div className="text-right">
