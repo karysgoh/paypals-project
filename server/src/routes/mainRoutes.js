@@ -131,6 +131,9 @@ router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
 const mapsRoutes = require('../routes/mapsRoutes.js');
 router.use('/maps', mapsRoutes);
 
+const notificationRoutes = require('../routes/notificationRoutes.js');
+router.use('/notifications', notificationRoutes);
+
 //////////////////////////////////////////////////////
 // EXPORT ROUTER
 //////////////////////////////////////////////////////

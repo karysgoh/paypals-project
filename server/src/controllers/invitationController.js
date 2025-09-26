@@ -1,4 +1,5 @@
 const invitationModel = require('../models/invitationModel');
+const notificationModel = require('../models/notificationModel');
 const logger = require("../logger.js");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
@@ -37,6 +38,34 @@ module.exports = {
 				inviteeId: inviteeId ? Number(inviteeId) : null,
 				email
 			});
+
+			// Create notification for invited user (if inviteeId exists)
+			if (inviteeId) {
+				try {
+					const { PrismaClient } = require('@prisma/client');
+					const prisma = new PrismaClient();
+					
+					const circle = await prisma.circle.findUnique({
+						where: { id: circleIdNum },
+						select: { name: true }
+					});
+					
+					await notificationModel.notifyCircleInvitation(
+						Number(inviteeId),
+						inviterUsername,
+						circle?.name || 'Circle',
+						circleIdNum
+					);
+				} catch (notificationError) {
+					logger.error('Error creating invitation notification', { 
+						error: notificationError.message,
+						inviteeId,
+						circleId: circleIdNum
+					});
+					// Don't fail the invitation if notifications fail
+				}
+			}
+
 			logger.info(`Invitation created for circle ${circleIdNum}`);
 			res.status(201).json({ status: 'success', message: 'Invitation sent', data: invitation });
 		} catch (error) {
@@ -55,6 +84,54 @@ module.exports = {
 		}
 		try {
 			const result = await invitationModel.acceptInvitation(idNum, userId);
+
+			// Create notifications for existing circle members when someone joins
+			try {
+				const { PrismaClient } = require('@prisma/client');
+				const prisma = new PrismaClient();
+				
+				// Get invitation details
+				const invitation = await prisma.invitation.findUnique({
+					where: { id: idNum },
+					include: { 
+						circle: { 
+							select: { 
+								id: true, 
+								name: true,
+								members: {
+									select: { user_id: true },
+									where: { 
+										status: 'active',
+										user_id: { not: userId } // Exclude the new member
+									}
+								}
+							} 
+						},
+						invitee: { select: { username: true } }
+					}
+				});
+
+				if (invitation && invitation.circle) {
+					const memberIds = invitation.circle.members.map(m => m.user_id);
+					
+					if (memberIds.length > 0) {
+						await notificationModel.notifyMemberJoined(
+							memberIds,
+							invitation.invitee?.username || 'Someone',
+							invitation.circle.name,
+							invitation.circle.id
+						);
+					}
+				}
+			} catch (notificationError) {
+				logger.error('Error creating member joined notification', { 
+					error: notificationError.message,
+					invitationId: idNum,
+					userId
+				});
+				// Don't fail the invitation acceptance if notifications fail
+			}
+
 			logger.info(`Invitation ${idNum} accepted by user ${userId}`);
 			res.status(200).json({ status: 'success', message: 'Invitation accepted', data: result });
 		} catch (error) {

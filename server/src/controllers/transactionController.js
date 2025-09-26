@@ -1,4 +1,5 @@
 const transactionModel = require('../models/transactionModel');
+const notificationModel = require('../models/notificationModel');
 const logger = require("../logger.js");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
@@ -112,6 +113,36 @@ module.exports = {
             const circleIdNum = parseInt(circleId, 10);
 
             const transaction = await transactionModel.createTransaction(circleIdNum, transactionData);
+
+            // Create notifications for transaction participants (excluding creator)
+            try {
+                const memberIds = transactionData.participants
+                    .filter(p => p.user_id && p.user_id !== transactionData.created_by)
+                    .map(p => p.user_id);
+                
+                if (memberIds.length > 0) {
+                    // Get creator's username for the notification
+                    const { PrismaClient } = require('@prisma/client');
+                    const prisma = new PrismaClient();
+                    const creator = await prisma.user.findUnique({
+                        where: { id: transactionData.created_by },
+                        select: { username: true }
+                    });
+                    
+                    await notificationModel.notifyTransactionCreated(
+                        transaction.id,
+                        memberIds,
+                        creator?.username || 'Someone',
+                        transactionData.name
+                    );
+                }
+            } catch (notificationError) {
+                logger.error('Error creating transaction notifications', { 
+                    error: notificationError.message,
+                    transactionId: transaction.id 
+                });
+                // Don't fail the transaction creation if notifications fail
+            }
 
             logger.info('Transaction created successfully', { 
                 transactionId: transaction.id, 
@@ -338,6 +369,54 @@ module.exports = {
             });
 
             const result = await transactionModel.updatePaymentStatus(transactionIdNum, userId, payment_status);
+
+            // Create notification for transaction creator when payment is received
+            if (payment_status === 'paid') {
+                try {
+                    const { PrismaClient } = require('@prisma/client');
+                    const prisma = new PrismaClient();
+                    
+                    // Get transaction details and payer info
+                    const transaction = await prisma.transaction.findUnique({
+                        where: { id: transactionIdNum },
+                        select: { 
+                            id: true,
+                            name: true,
+                            created_by: true
+                        }
+                    });
+                    
+                    const payer = await prisma.user.findUnique({
+                        where: { id: userId },
+                        select: { username: true }
+                    });
+
+                    const member = await prisma.transactionMember.findFirst({
+                        where: { 
+                            transaction_id: transactionIdNum,
+                            user_id: userId
+                        },
+                        select: { amount_owed: true }
+                    });
+                    
+                    if (transaction && transaction.created_by !== userId) {
+                        await notificationModel.notifyPaymentReceived(
+                            transaction.created_by,
+                            payer?.username || 'Someone',
+                            member?.amount_owed || 0,
+                            transaction.name,
+                            transaction.id
+                        );
+                    }
+                } catch (notificationError) {
+                    logger.error('Error creating payment notification', { 
+                        error: notificationError.message,
+                        transactionId: transactionIdNum,
+                        userId
+                    });
+                    // Don't fail the payment update if notifications fail
+                }
+            }
 
             logger.info('Payment status updated successfully', { 
                 transactionId: transactionIdNum,

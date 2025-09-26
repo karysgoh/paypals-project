@@ -3,6 +3,7 @@ import { DollarSign } from "lucide-react";
 import { useAuth } from "../components/AuthProvider";
 import { useNavigate, Link } from "react-router-dom";
 import Button from "../ui/Button";
+import NotificationBell from "./NotificationBell";
 
 const NavBar = () => {
   const { currentUser, handleLogout } = useAuth();
@@ -33,9 +34,12 @@ const NavBar = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {currentUser ? (
-              <Button variant="primary" size="md" onClick={handleLogout} aria-label="Sign out">
-                Sign Out
-              </Button>
+              <>
+                <NotificationBell />
+                <Button variant="primary" size="md" onClick={handleLogout} aria-label="Sign out">
+                  Sign Out
+                </Button>
+              </>
             ) : (
               <>
                 <Button

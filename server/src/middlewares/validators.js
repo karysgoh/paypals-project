@@ -110,6 +110,33 @@ const getAllUsersValidationRules = () => {
     ];
 };
 
+// Notification validation rules
+const validateNotificationCreation = [
+    body('user_id')
+        .isInt({ min: 1 })
+        .withMessage('User ID must be a positive integer'),
+    body('type')
+        .isIn(['transaction_created', 'payment_due', 'payment_received', 'circle_invitation', 'member_joined', 'general'])
+        .withMessage('Invalid notification type'),
+    body('title')
+        .trim()
+        .isLength({ min: 1, max: 100 })
+        .withMessage('Title must be between 1 and 100 characters'),
+    body('message')
+        .trim()
+        .isLength({ min: 1, max: 500 })
+        .withMessage('Message must be between 1 and 500 characters'),
+    body('transaction_id')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('Transaction ID must be a positive integer'),
+    body('circle_id')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('Circle ID must be a positive integer'),
+    validate
+];
+
 // Single module.exports with all functions
 module.exports = {
     validate,
@@ -117,5 +144,6 @@ module.exports = {
     questionValidationRules,
     activityValidationRules,
     rewardValidationRules,
-    getAllUsersValidationRules
+    getAllUsersValidationRules,
+    validateNotificationCreation
 };

@@ -136,6 +136,18 @@ export default function Dashboard() {
   const [showTransactionDetails, setShowTransactionDetails] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
+  // Quick action form state
+  const [showQuickForm, setShowQuickForm] = useState(false);
+  const [quickFormData, setQuickFormData] = useState({
+    name: '',
+    total_amount: '',
+    circle_id: '',
+    category: 'dining',
+    description: '',
+    participants: []
+  });
+  const [quickFormLoading, setQuickFormLoading] = useState(false);
+
   // Notification hook
   const { notification, showNotification, hideNotification } = useNotification();
 
@@ -337,8 +349,10 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json();
+        // Access invitations from the correct nested structure
+        const allInvitations = data.data?.invitations || [];
         // Filter for pending invitations only
-        const pendingInvitations = (data.data || []).filter(invitation => 
+        const pendingInvitations = allInvitations.filter(invitation => 
           invitation.status === 'pending'
         );
         setInvitations(pendingInvitations);
@@ -441,6 +455,92 @@ export default function Dashboard() {
 
   const userName = currentUser?.name || currentUser?.username || currentUser?.email?.split('@')[0] || 'there';
 
+  // Quick action form handlers
+  const handleQuickFormChange = (field, value) => {
+    setQuickFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleQuickFormSubmit = async (e) => {
+    e.preventDefault();
+    if (!quickFormData.circle_id || !quickFormData.name || !quickFormData.total_amount) {
+      showNotification('Please fill in all required fields', 'error');
+      return;
+    }
+
+    setQuickFormLoading(true);
+    try {
+      const selectedCircle = circles.find(c => c.id === parseInt(quickFormData.circle_id));
+      if (!selectedCircle) {
+        showNotification('Selected circle not found', 'error');
+        return;
+      }
+
+      // Get circle members to create participants
+      const circleResponse = await api.getCircleById(quickFormData.circle_id);
+      const circleData = circleResponse.data?.circle || {};
+      const members = circleData.members || [];
+
+      // Include all circle members as participants with equal split
+      const participantCount = members.length;
+      const amountPerPerson = parseFloat(quickFormData.total_amount) / participantCount;
+
+      const participants = members.map(member => ({
+        user_id: member.user_id,
+        amount_owed: amountPerPerson
+      }));
+
+      const transactionData = {
+        name: quickFormData.name,
+        description: quickFormData.description || '',
+        category: quickFormData.category,
+        total_amount: parseFloat(quickFormData.total_amount),
+        participants: participants
+      };
+
+      const response = await api.request(`/transactions/circles/${quickFormData.circle_id}`, {
+        method: 'POST',
+        body: JSON.stringify(transactionData)
+      });
+
+      showNotification('Transaction created successfully!', 'success');
+      
+      // Reset form
+      setQuickFormData({
+        name: '',
+        total_amount: '',
+        circle_id: '',
+        category: 'dining',
+        description: '',
+        participants: []
+      });
+      setShowQuickForm(false);
+      
+      // Refresh data
+      loadUserData();
+      
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+      showNotification('Failed to create transaction. Please try again.', 'error');
+    } finally {
+      setQuickFormLoading(false);
+    }
+  };
+
+  const resetQuickForm = () => {
+    setQuickFormData({
+      name: '',
+      total_amount: '',
+      circle_id: '',
+      category: 'dining',
+      description: '',
+      participants: []
+    });
+    setShowQuickForm(false);
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-white">
@@ -498,10 +598,19 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button 
+                variant="primary" 
+                size="md" 
+                className="w-full sm:w-auto"
+                onClick={() => setShowQuickForm(true)}
+              >
+                <Plus className="w-5 h-5 mr-1.5" />
+                Quick Add Transaction
+              </Button>
               <Link to={createPageUrl("transactions")} className="w-full sm:w-auto">
-                <Button variant="primary" size="md" className="w-full sm:w-auto">
+                <Button variant="outline" size="md" className="w-full sm:w-auto">
                   <Plus className="w-5 h-5 mr-1.5" />
-                  Add Transaction
+                  Advanced
                 </Button>
               </Link>
               <Link to={createPageUrl("circles")} className="w-full sm:w-auto">
@@ -512,6 +621,149 @@ export default function Dashboard() {
               </Link>
             </div>
           </div>
+
+          {/* Quick Action Form */}
+          {showQuickForm && (
+            <div className="mb-8 bg-slate-50 border border-slate-200 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">Quick Add Transaction</h3>
+                <button
+                  onClick={resetQuickForm}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleQuickFormSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Circle Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Circle <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={quickFormData.circle_id}
+                      onChange={(e) => handleQuickFormChange('circle_id', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                      required
+                    >
+                      <option value="">Select a circle</option>
+                      {circles.map((circle) => (
+                        <option key={circle.id} value={circle.id}>
+                          {circle.name} ({circle.member_count || 0} members)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Transaction Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Transaction Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={quickFormData.name}
+                      onChange={(e) => handleQuickFormChange('name', e.target.value)}
+                      placeholder="e.g., Dinner at Restaurant"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                      required
+                    />
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Total Amount <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quickFormData.total_amount}
+                      onChange={(e) => handleQuickFormChange('total_amount', e.target.value)}
+                      placeholder="0.00"
+                      min="0.01"
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                      required
+                    />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={quickFormData.category}
+                      onChange={(e) => handleQuickFormChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                    >
+                      <option value="dining">Dining</option>
+                      <option value="groceries">Groceries</option>
+                      <option value="entertainment">Entertainment</option>
+                      <option value="transport">Transport</option>
+                      <option value="utilities">Utilities</option>
+                      <option value="shopping">Shopping</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    value={quickFormData.description}
+                    onChange={(e) => handleQuickFormChange('description', e.target.value)}
+                    placeholder="Add any additional details..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                  />
+                </div>
+
+                {/* Split Info */}
+                {quickFormData.circle_id && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>Split:</strong> Amount will be split equally among all circle members.
+                      {quickFormData.total_amount && circles.find(c => c.id === parseInt(quickFormData.circle_id)) && (
+                        <span className="block mt-1">
+                          Each member will owe: $
+                          {(
+                            parseFloat(quickFormData.total_amount) / 
+                            (circles.find(c => c.id === parseInt(quickFormData.circle_id))?.member_count || 1)
+                          ).toFixed(2)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {/* Form Actions */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={quickFormLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    {quickFormLoading ? 'Creating...' : 'Create Transaction'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={resetQuickForm}
+                    className="w-full sm:w-auto"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Success/Error Messages */}
           {successMessage && (

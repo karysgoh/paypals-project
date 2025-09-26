@@ -4,7 +4,8 @@ const logger = require("../logger.js");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
 const crypto = require("crypto");
-const { sendVerificationEmail } = require("../utils/emailService.js"); 
+const { sendVerificationEmail } = require("../utils/emailService.js");
+const NotificationService = require("../services/notificationService"); 
 
 module.exports = {
   login: catchAsync(async (req, res, next) => {
@@ -68,6 +69,14 @@ module.exports = {
       logger.info(`Verification email sent to ${email}`);
     } catch (emailError) {
       logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
+    }
+
+    // Send welcome notification
+    try {
+      await NotificationService.sendWelcomeNotification(results.id, username);
+    } catch (notificationError) {
+      logger.error(`Failed to send welcome notification to user ${results.id}: ${notificationError.message}`);
+      // Don't fail registration if notification fails
     }
 
     logger.info(`User ${data.username} successfully created`);

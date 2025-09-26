@@ -71,8 +71,26 @@ const sanitizeResponse = (req, res, next) => {
   next();
 };
 
+// Notification-specific sanitization
+const sanitizeNotificationInput = (req, res, next) => {
+  if (req.body) {
+    // Sanitize notification-specific fields
+    if (req.body.title) {
+      req.body.title = sanitizeData(req.body.title.trim());
+    }
+    if (req.body.message) {
+      req.body.message = sanitizeData(req.body.message.trim());
+    }
+    if (req.body.type) {
+      req.body.type = req.body.type.toLowerCase();
+    }
+  }
+  next();
+};
+
 module.exports = {
   sanitizeData,
   sanitizeRequest,  
   sanitizeResponse,
+  sanitizeNotificationInput,
 };

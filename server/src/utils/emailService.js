@@ -486,10 +486,86 @@ Click the link above to log in to your PayPals account and complete payment with
   }
 };
 
+const sendPaymentReminderEmail = async (userEmail, reminderData) => {
+  try {
+    const transporter = createTransporter();
+    
+    const paymentUrl = `${process.env.FRONTEND_URL}/transaction/${reminderData.transactionId}/pay`;
+    
+    const mailOptions = {
+      from: {
+        name: 'PayPals Payment Reminder',
+        address: process.env.SMTP_USER
+      },
+      to: userEmail,
+      subject: `💰 Payment Reminder: ${reminderData.transactionName}`,
+      html: `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <div style="background-color: #F59E0B; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">💰 Payment Reminder</h1>
+          </div>
+          
+          <div style="padding: 30px; background-color: #f9fafb;">
+            <h2 style="color: #374151;">Hi ${reminderData.recipientName}! 👋</h2>
+            
+            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
+              This is a friendly reminder about your pending payment for:
+            </p>
+            
+            <div style="background-color: white; border-left: 4px solid #F59E0B; padding: 20px; margin: 20px 0;">
+              <h3 style="margin: 0 0 10px 0; color: #1F2937;">${reminderData.transactionName}</h3>
+              <p style="margin: 5px 0; color: #6B7280;">
+                <strong>Amount:</strong> $${reminderData.amount.toFixed(2)}
+              </p>
+              <p style="margin: 5px 0; color: #6B7280;">
+                <strong>Circle:</strong> ${reminderData.circleName}
+              </p>
+              <p style="margin: 5px 0; color: #6B7280;">
+                <strong>Created by:</strong> ${reminderData.creatorName}
+              </p>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
+              Please settle up when you get a chance. You can pay directly through PayPals or update your payment status manually.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${paymentUrl}" 
+                 style="background-color: #F59E0B; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                Pay Now
+              </a>
+            </div>
+            
+            <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+              <p style="color: #9CA3AF; font-size: 14px; text-align: center;">
+                This is an automated reminder from PayPals. If you've already paid, you can ignore this email or update your payment status in the app.
+              </p>
+            </div>
+          </div>
+          
+          <div style="background-color: #374151; padding: 20px; text-align: center;">
+            <p style="color: #9CA3AF; margin: 0; font-size: 14px;">
+              PayPals - Group expense management made simple
+            </p>
+          </div>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info(`Payment reminder email sent to ${userEmail}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    logger.error(`Failed to send payment reminder email to ${userEmail}: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendCircleInvitationEmail,
   sendExternalTransactionInvite,
-  sendTransactionPaymentReminder
+  sendTransactionPaymentReminder,
+  sendPaymentReminderEmail
 };
