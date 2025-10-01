@@ -29,6 +29,11 @@ const formatTransactionResponse = (transaction) => ({
     description: transaction.description,
     category: transaction.category,
     total_amount: transaction.total_amount,
+    base_amount: transaction.base_amount,
+    gst_rate: transaction.gst_rate,
+    service_charge_rate: transaction.service_charge_rate,
+    gst_amount: transaction.gst_amount,
+    service_charge_amount: transaction.service_charge_amount,
     circle_id: transaction.circle_id,
     created_by: transaction.created_by,
     location_name: transaction.location_name,
@@ -78,6 +83,32 @@ module.exports = {
 
             if (transactionData.total_amount <= 0) {
                 return next(new AppError('Total amount must be greater than 0', 400));
+            }
+
+            // Validate GST and service charge rates if provided
+            if (transactionData.gst_rate !== undefined) {
+                const gstRate = parseFloat(transactionData.gst_rate);
+                if (isNaN(gstRate) || gstRate < 0 || gstRate > 1) {
+                    return next(new AppError('GST rate must be a number between 0 and 1 (e.g., 0.07 for 7%)', 400));
+                }
+                transactionData.gst_rate = gstRate;
+            }
+
+            if (transactionData.service_charge_rate !== undefined) {
+                const serviceChargeRate = parseFloat(transactionData.service_charge_rate);
+                if (isNaN(serviceChargeRate) || serviceChargeRate < 0 || serviceChargeRate > 1) {
+                    return next(new AppError('Service charge rate must be a number between 0 and 1 (e.g., 0.10 for 10%)', 400));
+                }
+                transactionData.service_charge_rate = serviceChargeRate;
+            }
+
+            // Validate base amount if provided
+            if (transactionData.base_amount !== undefined) {
+                const baseAmount = parseFloat(transactionData.base_amount);
+                if (isNaN(baseAmount) || baseAmount <= 0) {
+                    return next(new AppError('Base amount must be a positive number', 400));
+                }
+                transactionData.base_amount = baseAmount;
             }
 
             if (!Array.isArray(transactionData.participants) || transactionData.participants.length === 0) {
@@ -484,6 +515,18 @@ module.exports = {
                 message: 'Transaction summary retrieved successfully',
                 data: {
                     summary,
+                    transactions: transactions.filter(t => t.user_payment_status === 'pending' || t.user_payment_status === 'unpaid').map(t => ({
+                        id: t.id,
+                        name: t.name,
+                        amount_owed: t.user_amount_owed,
+                        payment_status: t.user_payment_status,
+                        transaction: {
+                            name: t.name,
+                            circle: {
+                                name: t.circle?.name
+                            }
+                        }
+                    })),
                     recent_transactions: transactions.slice(0, 5).map(formatTransactionResponse)
                 }
             });
@@ -588,6 +631,138 @@ module.exports = {
             if (error.message.includes('Invalid or expired')) {
                 return next(new AppError('Invalid or expired access token', 401));
             }
+            const mapped = mapTransactionError(error);
+            return next(new AppError(mapped.message, mapped.status));
+        }
+    }),
+
+    // Bulk payment status update
+    bulkUpdatePaymentStatus: catchAsync(async (req, res, next) => {
+        try {
+            const userId = res.locals.user_id;
+            const { transaction_ids, payment_status, payment_method = 'bulk_payment' } = req.body;
+
+            // Validate input
+            if (!transaction_ids || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+                return next(new AppError('Transaction IDs array is required', 400));
+            }
+
+            if (!payment_status) {
+                return next(new AppError('Payment status is required', 400));
+            }
+
+            if (!['pending', 'paid'].includes(payment_status)) {
+                return next(new AppError('Payment status must be "pending" or "paid"', 400));
+            }
+
+            // Validate transaction IDs are numbers
+            const transactionIds = transaction_ids.map(id => {
+                const num = parseInt(id, 10);
+                if (isNaN(num)) {
+                    throw new Error(`Invalid transaction ID: ${id}`);
+                }
+                return num;
+            });
+
+            logger.info('Bulk payment status update called', { 
+                userId,
+                transactionIds,
+                paymentStatus: payment_status,
+                count: transactionIds.length
+            });
+
+            const results = [];
+            let successCount = 0;
+            let failureCount = 0;
+
+            // Process each transaction
+            for (const transactionId of transactionIds) {
+                try {
+                    const result = await transactionModel.updatePaymentStatus(transactionId, userId, payment_status);
+                    
+                    // Create notification for payment received
+                    if (payment_status === 'paid') {
+                        try {
+                            const { PrismaClient } = require('@prisma/client');
+                            const prisma = new PrismaClient();
+                            
+                            const transaction = await prisma.transaction.findUnique({
+                                where: { id: transactionId },
+                                select: { id: true, name: true, created_by: true }
+                            });
+                            
+                            const payer = await prisma.user.findUnique({
+                                where: { id: userId },
+                                select: { username: true }
+                            });
+
+                            const member = await prisma.transactionMember.findFirst({
+                                where: { transaction_id: transactionId, user_id: userId },
+                                select: { amount_owed: true }
+                            });
+                            
+                            if (transaction && transaction.created_by !== userId) {
+                                await notificationModel.notifyPaymentReceived(
+                                    transaction.created_by,
+                                    payer?.username || 'Someone',
+                                    member?.amount_owed || 0,
+                                    transaction.name,
+                                    transaction.id
+                                );
+                            }
+                        } catch (notificationError) {
+                            logger.error('Error creating bulk payment notification', { 
+                                error: notificationError.message,
+                                transactionId,
+                                userId
+                            });
+                        }
+                    }
+
+                    results.push({
+                        transaction_id: transactionId,
+                        success: true,
+                        message: result.message
+                    });
+                    successCount++;
+
+                } catch (error) {
+                    logger.error(`Error updating payment status for transaction ${transactionId}:`, error);
+                    results.push({
+                        transaction_id: transactionId,
+                        success: false,
+                        error: error.message
+                    });
+                    failureCount++;
+                }
+            }
+
+            logger.info('Bulk payment status update completed', { 
+                userId,
+                successCount,
+                failureCount,
+                total: transactionIds.length
+            });
+
+            const responseMessage = successCount === transactionIds.length 
+                ? `Successfully updated ${successCount} transaction${successCount > 1 ? 's' : ''}`
+                : `Updated ${successCount} transaction${successCount !== 1 ? 's' : ''}, ${failureCount} failed`;
+
+            res.status(200).json({
+                status: successCount > 0 ? 'success' : 'error',
+                message: responseMessage,
+                data: {
+                    results,
+                    summary: {
+                        total: transactionIds.length,
+                        successful: successCount,
+                        failed: failureCount
+                    }
+                }
+            });
+
+        } catch (error) {
+            logger.error(`Error in bulk payment update: ${error}`);
             const mapped = mapTransactionError(error);
             return next(new AppError(mapped.message, mapped.status));
         }

@@ -47,15 +47,57 @@ module.exports = {
                     throw new Error('Access denied: User is not a member of the circle');
                 }
 
+                // Calculate GST and service charge amounts if rates are provided
+                let calculatedData = { ...data };
+                if (data.gst_rate || data.service_charge_rate) {
+                    // If we have rates, calculate the base amount and individual charges
+                    const gstRate = parseFloat(data.gst_rate) || 0;
+                    const serviceChargeRate = parseFloat(data.service_charge_rate) || 0;
+                    
+                    if (data.base_amount) {
+                        // If base amount is provided, calculate total from base + charges
+                        const baseAmount = parseFloat(data.base_amount);
+                        const gstAmount = baseAmount * gstRate;
+                        const serviceChargeAmount = baseAmount * serviceChargeRate;
+                        const totalAmount = baseAmount + gstAmount + serviceChargeAmount;
+                        
+                        calculatedData = {
+                            ...data,
+                            base_amount: baseAmount,
+                            gst_amount: gstAmount,
+                            service_charge_amount: serviceChargeAmount,
+                            total_amount: totalAmount
+                        };
+                    } else {
+                        // If total amount is provided, work backwards to find base amount
+                        const totalAmount = parseFloat(data.total_amount);
+                        const baseAmount = totalAmount / (1 + gstRate + serviceChargeRate);
+                        const gstAmount = baseAmount * gstRate;
+                        const serviceChargeAmount = baseAmount * serviceChargeRate;
+                        
+                        calculatedData = {
+                            ...data,
+                            base_amount: baseAmount,
+                            gst_amount: gstAmount,
+                            service_charge_amount: serviceChargeAmount
+                        };
+                    }
+                }
+
                 // Create the transaction
                 const transaction = await tx.transaction.create({
                     data: {
-                        name: data.name,
-                        description: data.description,
-                        category: data.category || 'other',
-                        total_amount: data.total_amount,
+                        name: calculatedData.name,
+                        description: calculatedData.description,
+                        category: calculatedData.category || 'other',
+                        total_amount: calculatedData.total_amount,
+                        base_amount: calculatedData.base_amount,
+                        gst_rate: calculatedData.gst_rate,
+                        service_charge_rate: calculatedData.service_charge_rate,
+                        gst_amount: calculatedData.gst_amount,
+                        service_charge_amount: calculatedData.service_charge_amount,
                         circle_id: circleId,
-                        created_by: data.created_by,
+                        created_by: calculatedData.created_by,
                         ...locationData
                     }
                 });
@@ -924,5 +966,96 @@ module.exports = {
             console.error('Error fetching external participants:', error);
             throw error;
         }
+    },
+
+    // Utility functions for GST and service charge calculations
+    calculateBillSplit: (baseAmount, participants, gstRate = 0, serviceChargeRate = 0) => {
+        const numParticipants = participants.length;
+        
+        // Calculate charges
+        const gstAmount = baseAmount * gstRate;
+        const serviceChargeAmount = baseAmount * serviceChargeRate;
+        const totalCharges = gstAmount + serviceChargeAmount;
+        const totalAmount = baseAmount + totalCharges;
+        
+        // Split base amount equally
+        const basePerPerson = baseAmount / numParticipants;
+        
+        // Split charges equally
+        const chargesPerPerson = totalCharges / numParticipants;
+        const totalPerPerson = basePerPerson + chargesPerPerson;
+        
+        // Handle rounding - add remainder to first participant
+        const roundedAmounts = participants.map((participant, index) => {
+            let amount = Math.round(totalPerPerson * 100) / 100;
+            
+            // Add any remainder to the first participant to ensure total adds up
+            if (index === 0) {
+                const totalCalculated = amount * numParticipants;
+                const remainder = Math.round((totalAmount - totalCalculated) * 100) / 100;
+                amount += remainder;
+            }
+            
+            return {
+                ...participant,
+                amount_owed: amount,
+                base_amount_share: Math.round(basePerPerson * 100) / 100,
+                gst_share: Math.round((gstAmount / numParticipants) * 100) / 100,
+                service_charge_share: Math.round((serviceChargeAmount / numParticipants) * 100) / 100
+            };
+        });
+        
+        return {
+            participants: roundedAmounts,
+            breakdown: {
+                base_amount: baseAmount,
+                gst_rate: gstRate,
+                service_charge_rate: serviceChargeRate,
+                gst_amount: gstAmount,
+                service_charge_amount: serviceChargeAmount,
+                total_amount: totalAmount
+            }
+        };
+    },
+
+    calculateCustomSplit: (baseAmount, participantShares, gstRate = 0, serviceChargeRate = 0) => {
+        // participantShares should be an array like [{ user_id: 1, share_percentage: 0.5 }, ...]
+        const totalShares = participantShares.reduce((sum, p) => sum + p.share_percentage, 0);
+        
+        if (Math.abs(totalShares - 1.0) > 0.001) {
+            throw new Error('Share percentages must add up to 100%');
+        }
+        
+        // Calculate charges
+        const gstAmount = baseAmount * gstRate;
+        const serviceChargeAmount = baseAmount * serviceChargeRate;
+        const totalCharges = gstAmount + serviceChargeAmount;
+        const totalAmount = baseAmount + totalCharges;
+        
+        const participants = participantShares.map(participant => {
+            const baseShare = baseAmount * participant.share_percentage;
+            const chargesShare = totalCharges * participant.share_percentage;
+            const totalShare = baseShare + chargesShare;
+            
+            return {
+                ...participant,
+                amount_owed: Math.round(totalShare * 100) / 100,
+                base_amount_share: Math.round(baseShare * 100) / 100,
+                gst_share: Math.round((gstAmount * participant.share_percentage) * 100) / 100,
+                service_charge_share: Math.round((serviceChargeAmount * participant.share_percentage) * 100) / 100
+            };
+        });
+        
+        return {
+            participants,
+            breakdown: {
+                base_amount: baseAmount,
+                gst_rate: gstRate,
+                service_charge_rate: serviceChargeRate,
+                gst_amount: gstAmount,
+                service_charge_amount: serviceChargeAmount,
+                total_amount: totalAmount
+            }
+        };
     }
 };

@@ -12,10 +12,17 @@ import {
   Clock3,
   MoreHorizontal,
   UserPlus,
+  UserMinus,
   X,
   MapPin,
   Calendar,
-  CreditCard
+  CreditCard,
+  CheckCircle,
+  Navigation,
+  Target,
+  Search,
+  Mail,
+  Trash
 } from "lucide-react";
 
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, ...props }) => {
@@ -136,17 +143,41 @@ export default function Dashboard() {
   const [showTransactionDetails, setShowTransactionDetails] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
-  // Quick action form state
-  const [showQuickForm, setShowQuickForm] = useState(false);
-  const [quickFormData, setQuickFormData] = useState({
+  // Transaction form state (similar to CircleDetail)
+  const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [txForm, setTxForm] = useState({
     name: '',
-    total_amount: '',
-    circle_id: '',
-    category: 'dining',
     description: '',
-    participants: []
+    category: 'other',
+    total_amount: '',
+    base_amount: '',
+    gst_rate: '9',
+    service_charge_rate: '10',
+    gst_amount: '',
+    service_charge_amount: '',
+    circle_id: '',
+    splitEven: true,
+    participants: [],
+    external_participants: [],
+    place_id: '',
+    location_lat: '',
+    location_lng: '',
   });
-  const [quickFormLoading, setQuickFormLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [txError, setTxError] = useState(null);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [placeSearchResults, setPlaceSearchResults] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchingPlaces, setSearchingPlaces] = useState(false);
+  const [circleMembers, setCircleMembers] = useState([]);
+  const [searchLat, setSearchLat] = useState('');
+  const [searchLng, setSearchLng] = useState('');
+  const [debounceRef] = useState({ current: null });
+
+  // Bulk payment state
+  const [showBulkPayment, setShowBulkPayment] = useState(false);
+  const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState([]);
 
   // Notification hook
   const { notification, showNotification, hideNotification } = useNotification();
@@ -176,7 +207,8 @@ export default function Dashboard() {
       if (isCreator) {
         // For transactions I created, calculate what others owe me
         members.forEach(member => {
-          if (member.user_id !== currentUserId && member.payment_status === 'pending') {
+          const isPending = member.payment_status === 'pending' || member.payment_status === 'unpaid' || !member.payment_status;
+          if (member.user_id !== currentUserId && isPending) {
             const amount = parseFloat(member.amount_owed || 0);
             owedTo += amount;
             
@@ -199,10 +231,12 @@ export default function Dashboard() {
           }
         });
       } else {
-        // For transactions others created, find my debt
-        const myMembership = members.find(member => member.user_id === currentUserId);
-        if (myMembership && myMembership.payment_status === 'pending') {
-          const amount = parseFloat(myMembership.amount_owed || 0);
+        // For transactions others created, find my debt using user_payment_status
+        const userPaymentStatus = transaction.user_payment_status;
+        const isPending = userPaymentStatus === 'pending' || userPaymentStatus === 'unpaid' || !userPaymentStatus;
+        
+        if (isPending && transaction.user_amount_owed) {
+          const amount = parseFloat(transaction.user_amount_owed || 0);
           owes += amount;
 
           // Add to detailed breakdown
@@ -455,90 +489,431 @@ export default function Dashboard() {
 
   const userName = currentUser?.name || currentUser?.username || currentUser?.email?.split('@')[0] || 'there';
 
-  // Quick action form handlers
-  const handleQuickFormChange = (field, value) => {
-    setQuickFormData(prev => ({
-      ...prev,
-      [field]: value
+  // Transaction form handlers (adapted from CircleDetail)
+  const updateParticipantInclude = (user_id, include) => {
+    if (currentUser && user_id === currentUser.user_id) return;
+    setTxForm(f => ({
+      ...f,
+      participants: f.participants.map(p => p.user_id === user_id ? { ...p, include } : p),
     }));
   };
 
-  const handleQuickFormSubmit = async (e) => {
+  const updateParticipantAmount = (user_id, amount) => {
+    setTxForm(f => ({
+      ...f,
+      participants: f.participants.map(p => p.user_id === user_id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p),
+    }));
+  };
+
+  const addExternalParticipant = () => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: [...f.external_participants, { 
+        id: Date.now(),
+        email: '', 
+        name: '', 
+        amount_owed: 0, 
+        include: true 
+      }]
+    }));
+  };
+
+  const removeExternalParticipant = (id) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.filter(p => p.id !== id)
+    }));
+  };
+
+  const updateExternalParticipant = (id, field, value) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, [field]: value } : p
+      )
+    }));
+  };
+
+  const updateExternalParticipantInclude = (id, include) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, include } : p
+      )
+    }));
+  };
+
+  const updateExternalParticipantAmount = (id, amount) => {
+    setTxForm(f => ({
+      ...f,
+      external_participants: f.external_participants.map(p => 
+        p.id === id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p
+      )
+    }));
+  };
+
+  const handleCreateTransaction = async (e) => {
     e.preventDefault();
-    if (!quickFormData.circle_id || !quickFormData.name || !quickFormData.total_amount) {
-      showNotification('Please fill in all required fields', 'error');
-      return;
+    setTxError(null);
+    if (!txForm.circle_id) return setTxError('Please select a circle');
+    const total = parseFloat(txForm.total_amount);
+    if (!txForm.name || !total || total <= 0) return setTxError('Please provide a name and a valid total amount');
+
+    const included = txForm.participants.filter(p => p.include);
+    const external = txForm.external_participants.filter(p => p.include);
+    
+    if (included.length === 0 && external.length === 0) {
+      return setTxError('Select at least one participant');
     }
 
-    setQuickFormLoading(true);
+    if (currentUser) {
+      const creatorIncluded = included.some(p => p.user_id === currentUser.user_id);
+      if (!creatorIncluded) return setTxError('Transaction creator must be included as a participant');
+    }
+
+    setCreating(true);
     try {
-      const selectedCircle = circles.find(c => c.id === parseInt(quickFormData.circle_id));
-      if (!selectedCircle) {
-        showNotification('Selected circle not found', 'error');
-        return;
+      let participantsPayload = [];
+      const totalParticipants = included.length + external.length;
+      
+      if (txForm.splitEven) {
+        const share = parseFloat((total / totalParticipants).toFixed(2));
+        let running = 0;
+        
+        included.forEach((p, idx) => {
+          const amount = idx === totalParticipants - 1 && external.length === 0 
+            ? parseFloat((total - running).toFixed(2)) 
+            : share;
+          running += amount;
+          participantsPayload.push({ user_id: p.user_id, amount_owed: amount });
+        });
+        
+        external.forEach((p, idx) => {
+          const isLast = idx === external.length - 1;
+          const amount = isLast ? parseFloat((total - running).toFixed(2)) : share;
+          running += amount;
+          participantsPayload.push({ 
+            external_email: p.email, 
+            external_name: p.name || p.email.split('@')[0], 
+            amount_owed: amount 
+          });
+        });
+      } else {
+        included.forEach(p => {
+          participantsPayload.push({ user_id: p.user_id, amount_owed: p.amount_owed });
+        });
+        external.forEach(p => {
+          participantsPayload.push({ 
+            external_email: p.email, 
+            external_name: p.name || p.email.split('@')[0], 
+            amount_owed: p.amount_owed 
+          });
+        });
+        
+        const totalAmount = participantsPayload.reduce((s, p) => s + p.amount_owed, 0);
+        if (Math.abs(totalAmount - total) > 0.01) {
+          return setTxError(`Total amounts (${totalAmount.toFixed(2)}) must equal transaction total (${total.toFixed(2)})`);
+        }
       }
 
-      // Get circle members to create participants
-      const circleResponse = await api.getCircleById(quickFormData.circle_id);
-      const circleData = circleResponse.data?.circle || {};
-      const members = circleData.members || [];
-
-      // Include all circle members as participants with equal split
-      const participantCount = members.length;
-      const amountPerPerson = parseFloat(quickFormData.total_amount) / participantCount;
-
-      const participants = members.map(member => ({
-        user_id: member.user_id,
-        amount_owed: amountPerPerson
-      }));
-
-      const transactionData = {
-        name: quickFormData.name,
-        description: quickFormData.description || '',
-        category: quickFormData.category,
-        total_amount: parseFloat(quickFormData.total_amount),
-        participants: participants
+      const payload = {
+        name: txForm.name,
+        description: txForm.description,
+        category: txForm.category,
+        total_amount: total,
+        base_amount: txForm.base_amount ? parseFloat(txForm.base_amount) : undefined,
+        gst_rate: txForm.gst_rate ? parseFloat(txForm.gst_rate) / 100 : undefined,
+        service_charge_rate: txForm.service_charge_rate ? parseFloat(txForm.service_charge_rate) / 100 : undefined,
+        gst_amount: txForm.gst_amount ? parseFloat(txForm.gst_amount) : undefined,
+        service_charge_amount: txForm.service_charge_amount ? parseFloat(txForm.service_charge_amount) : undefined,
+        participants: participantsPayload,
+        place_id: selectedPlace?.place_id,
+        location_lat: selectedPlace?.geometry?.location?.lat,
+        location_lng: selectedPlace?.geometry?.location?.lng,
       };
 
-      const response = await api.request(`/transactions/circles/${quickFormData.circle_id}`, {
+      const response = await api.request(`/transactions/circles/${txForm.circle_id}`, {
         method: 'POST',
-        body: JSON.stringify(transactionData)
+        body: JSON.stringify(payload)
       });
 
       showNotification('Transaction created successfully!', 'success');
-      
-      // Reset form
-      setQuickFormData({
-        name: '',
-        total_amount: '',
-        circle_id: '',
-        category: 'dining',
-        description: '',
-        participants: []
-      });
-      setShowQuickForm(false);
-      
-      // Refresh data
+      resetTransactionForm();
       loadUserData();
       
     } catch (error) {
       console.error('Error creating transaction:', error);
-      showNotification('Failed to create transaction. Please try again.', 'error');
+      const message = error?.message || 'Failed to create transaction';
+      setTxError(message);
+      showNotification(message, 'error');
     } finally {
-      setQuickFormLoading(false);
+      setCreating(false);
     }
   };
 
-  const resetQuickForm = () => {
-    setQuickFormData({
+  const resetTransactionForm = () => {
+    setTxForm({
       name: '',
-      total_amount: '',
-      circle_id: '',
-      category: 'dining',
       description: '',
-      participants: []
+      category: 'other',
+      total_amount: '',
+      base_amount: '',
+      gst_rate: '9',
+      service_charge_rate: '10',
+      gst_amount: '',
+      service_charge_amount: '',
+      circle_id: '',
+      splitEven: true,
+      participants: [],
+      external_participants: [],
+      place_id: '',
+      location_lat: '',
+      location_lng: '',
     });
-    setShowQuickForm(false);
+    setSelectedPlace(null);
+    setPlaceSearchResults([]);
+    setSearchQuery('');
+    setSearchLat('');
+    setSearchLng('');
+    setCircleMembers([]);
+    setTxError(null);
+    setShowTransactionForm(false);
+  };
+
+  // Load circle members when circle is selected
+  const loadCircleMembers = async (circleId) => {
+    if (!circleId) {
+      setCircleMembers([]);
+      setTxForm(f => ({ ...f, participants: [] }));
+      return;
+    }
+    
+    try {
+      const response = await api.getCircleById(circleId);
+      const circle = response.data?.circle || response.data;
+      if (circle?.members) {
+        // Match CircleDetail format exactly
+        const defaultParticipants = (circle.members || []).map(m => ({
+          user_id: m.user_id || m.id,
+          username: m.user?.username || m.username || m.name || m.email || String(m.user_id || m.id),
+          amount_owed: 0,
+          include: true,
+          user: m.user || { id: m.user_id, username: m.user?.username || 'Unknown' }
+        }));
+        setCircleMembers(circle.members);
+        setTxForm(f => ({ ...f, participants: defaultParticipants }));
+        console.log('Loaded participants:', defaultParticipants); // Debug log
+      }
+    } catch (error) {
+      console.error('Error loading circle members:', error);
+      setTxError('Failed to load circle members');
+      setCircleMembers([]);
+      setTxForm(f => ({ ...f, participants: [] }));
+    }
+  };
+
+  // Handle circle selection change
+  const handleCircleChange = (circleId) => {
+    setTxForm(f => ({ ...f, circle_id: circleId }));
+    loadCircleMembers(circleId);
+  };
+
+  // Handle GST and service charge calculations
+  const handleFormChange = (field, value) => {
+    setTxForm(f => ({ ...f, [field]: value }));
+    
+    // Auto-calculate amounts when base amount or rates change
+    if (field === 'base_amount' || field === 'gst_rate' || field === 'service_charge_rate') {
+      const newData = { ...txForm, [field]: value };
+      const baseAmount = parseFloat(newData.base_amount) || 0;
+      const gstRate = parseFloat(newData.gst_rate) || 0;
+      const serviceChargeRate = parseFloat(newData.service_charge_rate) || 0;
+      
+      if (baseAmount > 0) {
+        const gstAmount = baseAmount * (gstRate / 100);
+        const serviceChargeAmount = baseAmount * (serviceChargeRate / 100);
+        const totalAmount = baseAmount + gstAmount + serviceChargeAmount;
+        
+        setTxForm(f => ({
+          ...f,
+          [field]: value,
+          gst_amount: gstAmount.toFixed(2),
+          service_charge_amount: serviceChargeAmount.toFixed(2),
+          total_amount: totalAmount.toFixed(2)
+        }));
+        return;
+      }
+    }
+    
+    // Auto-calculate base amount when total amount changes and rates are set
+    if (field === 'total_amount') {
+      const gstRate = parseFloat(txForm.gst_rate) || 0;
+      const serviceChargeRate = parseFloat(txForm.service_charge_rate) || 0;
+      const totalAmount = parseFloat(value) || 0;
+      
+      if (totalAmount > 0 && (gstRate > 0 || serviceChargeRate > 0)) {
+        const baseAmount = totalAmount / (1 + (gstRate / 100) + (serviceChargeRate / 100));
+        const gstAmount = baseAmount * (gstRate / 100);
+        const serviceChargeAmount = baseAmount * (serviceChargeRate / 100);
+        
+        setTxForm(f => ({
+          ...f,
+          [field]: value,
+          base_amount: baseAmount.toFixed(2),
+          gst_amount: gstAmount.toFixed(2),
+          service_charge_amount: serviceChargeAmount.toFixed(2)
+        }));
+        return;
+      }
+    }
+  };
+
+  // Location search functions
+  const performSearch = async ({ query, lat, lng, radius = 1000 } = {}) => {
+    setSearchingPlaces(true);
+    setPlaceSearchResults([]);
+    try {
+      let url = '';
+      if (query && query.trim().length > 0) {
+        url = `${api.baseURL}/maps/search?query=${encodeURIComponent(query)}&radius=${radius}`;
+      } else if (lat && lng) {
+        url = `${api.baseURL}/maps/search?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=${radius}`;
+      } else return;
+      const res = await fetch(url, {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Search failed');
+      setPlaceSearchResults(json.data || []);
+    } catch (err) {
+      setTxError(err.message || 'Place search failed');
+    } finally {
+      setSearchingPlaces(false);
+    }
+  };
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return setTxError('Geolocation not supported');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setSearchLat(String(lat));
+        setSearchLng(String(lng));
+        performSearch({ lat, lng });
+      },
+      err => setTxError(err.message || 'Failed to get location')
+    );
+  };
+
+  const useCircleCentroid = () => {
+    // Calculate centroid from selected circle members if available
+    if (txForm.circle_id && circleMembers.length > 0) {
+      const validCoords = circleMembers.filter(member => 
+        member.location_lat && member.location_lng && 
+        !isNaN(parseFloat(member.location_lat)) && !isNaN(parseFloat(member.location_lng))
+      );
+      
+      if (validCoords.length > 0) {
+        const avgLat = validCoords.reduce((sum, member) => sum + parseFloat(member.location_lat), 0) / validCoords.length;
+        const avgLng = validCoords.reduce((sum, member) => sum + parseFloat(member.location_lng), 0) / validCoords.length;
+        setSearchLat(String(avgLat));
+        setSearchLng(String(avgLng));
+        performSearch({ lat: avgLat, lng: avgLng });
+      } else {
+        setTxError('No location data available for circle members');
+      }
+    }
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    if ((!searchQuery || searchQuery.trim() === '') && !searchLat && !searchLng) {
+      setPlaceSearchResults([]);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      performSearch({ query: searchQuery, lat: searchLat, lng: searchLng });
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery, searchLat, searchLng]);
+
+  // Bulk payment functions
+  const getPendingTransactions = () => {
+    if (!transactionSummary?.transactions) return [];
+    return transactionSummary.transactions.filter(t => 
+      t.payment_status === 'unpaid' || t.payment_status === 'pending'
+    );
+  };
+
+  const handleBulkPaymentOpen = () => {
+    const pending = getPendingTransactions();
+    setSelectedTransactions(pending.map(t => t.id));
+    setShowBulkPayment(true);
+  };
+
+  const handleTransactionToggle = (transactionId) => {
+    setSelectedTransactions(prev => 
+      prev.includes(transactionId)
+        ? prev.filter(id => id !== transactionId)
+        : [...prev, transactionId]
+    );
+  };
+
+  const handleBulkPayment = async () => {
+    if (selectedTransactions.length === 0) {
+      showNotification('Please select at least one transaction to pay.', 'error');
+      return;
+    }
+
+    setBulkPaymentLoading(true);
+
+    try {
+      const response = await api.request('/transactions/bulk/status', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          transaction_ids: selectedTransactions,
+          payment_status: 'paid',
+          payment_method: 'bulk_payment'
+        })
+      });
+
+      const { data } = response;
+      const { summary } = data;
+
+      // Show results based on the summary
+      if (summary.successful > 0 && summary.failed === 0) {
+        showNotification(`Successfully paid ${summary.successful} transaction${summary.successful > 1 ? 's' : ''}!`, 'success');
+      } else if (summary.successful > 0 && summary.failed > 0) {
+        showNotification(`Paid ${summary.successful} transaction${summary.successful > 1 ? 's' : ''}, ${summary.failed} failed.`, 'warning');
+      } else {
+        showNotification('Failed to process any payments. Please try again.', 'error');
+      }
+
+      // Refresh data and close modal if any succeeded
+      if (summary.successful > 0) {
+        loadUserData();
+      }
+      setShowBulkPayment(false);
+      setSelectedTransactions([]);
+
+    } catch (error) {
+      console.error('Error processing bulk payment:', error);
+      showNotification('Failed to process bulk payment. Please try again.', 'error');
+    } finally {
+      setBulkPaymentLoading(false);
+    }
+  };
+
+  const getTotalSelectedAmount = () => {
+    if (!transactionSummary?.transactions) return 0;
+    return transactionSummary.transactions
+      .filter(t => selectedTransactions.includes(t.id))
+      .reduce((sum, t) => sum + parseFloat(t.amount_owed || 0), 0);
   };
 
   if (authLoading || isLoading) {
@@ -602,17 +977,11 @@ export default function Dashboard() {
                 variant="primary" 
                 size="md" 
                 className="w-full sm:w-auto"
-                onClick={() => setShowQuickForm(true)}
+                onClick={() => setShowTransactionForm(true)}
               >
                 <Plus className="w-5 h-5 mr-1.5" />
-                Quick Add Transaction
+                Add Transaction
               </Button>
-              <Link to={createPageUrl("transactions")} className="w-full sm:w-auto">
-                <Button variant="outline" size="md" className="w-full sm:w-auto">
-                  <Plus className="w-5 h-5 mr-1.5" />
-                  Advanced
-                </Button>
-              </Link>
               <Link to={createPageUrl("circles")} className="w-full sm:w-auto">
                 <Button variant="secondary" size="md" className="w-full sm:w-auto">
                   <Users className="w-5 h-5 mr-1.5" />
@@ -622,146 +991,467 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Quick Action Form */}
-          {showQuickForm && (
-            <div className="mb-8 bg-slate-50 border border-slate-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">Quick Add Transaction</h3>
-                <button
-                  onClick={resetQuickForm}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <form onSubmit={handleQuickFormSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Circle Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Circle <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={quickFormData.circle_id}
-                      onChange={(e) => handleQuickFormChange('circle_id', e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-                      required
-                    >
-                      <option value="">Select a circle</option>
-                      {circles.map((circle) => (
-                        <option key={circle.id} value={circle.id}>
-                          {circle.name} ({circle.member_count || 0} members)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Transaction Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Transaction Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={quickFormData.name}
-                      onChange={(e) => handleQuickFormChange('name', e.target.value)}
-                      placeholder="e.g., Dinner at Restaurant"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-                      required
-                    />
-                  </div>
-
-                  {/* Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Total Amount <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={quickFormData.total_amount}
-                      onChange={(e) => handleQuickFormChange('total_amount', e.target.value)}
-                      placeholder="0.00"
-                      min="0.01"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-                      required
-                    />
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={quickFormData.category}
-                      onChange={(e) => handleQuickFormChange('category', e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-                    >
-                      <option value="dining">Dining</option>
-                      <option value="groceries">Groceries</option>
-                      <option value="entertainment">Entertainment</option>
-                      <option value="transport">Transport</option>
-                      <option value="utilities">Utilities</option>
-                      <option value="shopping">Shopping</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
+          {/* Transaction Form Modal */}
+          {showTransactionForm && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-slate-900">Create Transaction</h3>
+                  <button onClick={resetTransactionForm} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    value={quickFormData.description}
-                    onChange={(e) => handleQuickFormChange('description', e.target.value)}
-                    placeholder="Add any additional details..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-                  />
-                </div>
-
-                {/* Split Info */}
-                {quickFormData.circle_id && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p className="text-sm text-blue-800">
-                      <strong>Split:</strong> Amount will be split equally among all circle members.
-                      {quickFormData.total_amount && circles.find(c => c.id === parseInt(quickFormData.circle_id)) && (
-                        <span className="block mt-1">
-                          Each member will owe: $
-                          {(
-                            parseFloat(quickFormData.total_amount) / 
-                            (circles.find(c => c.id === parseInt(quickFormData.circle_id))?.member_count || 1)
-                          ).toFixed(2)}
-                        </span>
+                <div className="p-6">
+                  <form onSubmit={handleCreateTransaction} className="space-y-6">
+                    {txError && (
+                      <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
+                        {txError}
+                      </div>
+                    )}
+                    
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-slate-900">Transaction Details</h4>
+                      
+                      {/* Circle Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Circle *</label>
+                        <select
+                          value={txForm.circle_id}
+                          onChange={(e) => handleCircleChange(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                          required
+                        >
+                          <option value="">Select a circle</option>
+                          {circles.map((circle) => (
+                            <option key={circle.id} value={circle.id}>
+                              {circle.name} ({circle.memberCount || 0} members)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Transaction Name *</label>
+                        <input
+                          value={txForm.name}
+                          onChange={e => setTxForm(f => ({ ...f, name: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                          placeholder="e.g. Dinner at restaurant"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                        <input
+                          value={txForm.description}
+                          onChange={e => setTxForm(f => ({ ...f, description: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                          placeholder="Additional details (optional)"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                        <select
+                          value={txForm.category}
+                          onChange={e => setTxForm(f => ({ ...f, category: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                        >
+                          <option value="food">Food & Dining</option>
+                          <option value="travel">Travel</option>
+                          <option value="entertainment">Entertainment</option>
+                          <option value="shopping">Shopping</option>
+                          <option value="transportation">Transportation</option>
+                          <option value="utilities">Utilities</option>
+                          <option value="rent">Rent</option>
+                          <option value="groceries">Groceries</option>
+                          <option value="healthcare">Healthcare</option>
+                          <option value="education">Education</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      
+                      {/* Location Section */}
+                      <div className="space-y-4">
+                        <h4 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+                          <MapPin className="w-5 h-5" />
+                          Location (Optional)
+                        </h4>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Search Places</label>
+                          <input
+                            placeholder="e.g. 'Starbucks', 'restaurant', 'mall'"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => performSearch({ query: searchQuery, lat: searchLat, lng: searchLng })}
+                            disabled={searchingPlaces}
+                            className="flex items-center gap-2"
+                          >
+                            <MapPin className="w-4 h-4" />
+                            {searchingPlaces ? 'Searching...' : 'Search Places'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={useMyLocation}
+                            className="flex items-center gap-2"
+                          >
+                            <Navigation className="w-4 h-4" />
+                            Use My Location
+                          </Button>
+                          {txForm.circle_id && circleMembers.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={useCircleCentroid}
+                              className="flex items-center gap-2"
+                            >
+                              <Target className="w-4 h-4" />
+                              Circle Center
+                            </Button>
+                          )}
+                        </div>
+                        {placeSearchResults.length > 0 && (
+                          <div className="border border-slate-200 rounded-md bg-white max-h-48 overflow-auto">
+                            <div className="p-2">
+                              <div className="text-sm font-medium text-slate-700 mb-2">Select a location:</div>
+                              {placeSearchResults.map(p => {
+                                const isSelected = selectedPlace && (selectedPlace.place_id === p.place_id || selectedPlace.placeId === p.place_id);
+                                return (
+                                  <div
+                                    key={p.place_id}
+                                    className={`p-3 cursor-pointer rounded-md transition-colors ${
+                                      isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-50 border border-transparent'
+                                    }`}
+                                    onClick={() => setSelectedPlace(p)}
+                                  >
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium text-slate-900">{p.name}</div>
+                                        <div className="text-xs text-slate-600">{p.vicinity || p.formatted_address}</div>
+                                      </div>
+                                      {isSelected && (
+                                        <div className="text-xs text-blue-600 font-medium">Selected</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {selectedPlace && (
+                          <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                                  <MapPin className="w-4 h-4 text-blue-600" />
+                                  {selectedPlace.name}
+                                </div>
+                                <div className="text-xs text-slate-600 mt-1">{selectedPlace.vicinity || selectedPlace.formatted_address}</div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedPlace(null);
+                                  setPlaceSearchResults([]);
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* GST and Service Charge Fields */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Base Amount (before charges)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={txForm.base_amount}
+                              onChange={e => handleFormChange('base_amount', e.target.value)}
+                              className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Total Amount *</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={txForm.total_amount}
+                              onChange={e => handleFormChange('total_amount', e.target.value)}
+                              className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                              placeholder="0.00"
+                              required
+                            />
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">GST Rate (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={txForm.gst_rate}
+                            onChange={e => handleFormChange('gst_rate', e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                            placeholder="9"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Service Charge Rate (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={txForm.service_charge_rate}
+                            onChange={e => handleFormChange('service_charge_rate', e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                            placeholder="10"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* GST/Service Charge Breakdown */}
+                    {(txForm.gst_amount > 0 || txForm.service_charge_amount > 0) && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+                        <h5 className="text-sm font-medium text-amber-900 mb-3">Amount Breakdown</h5>
+                        <div className="space-y-2 text-sm">
+                          {txForm.base_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-amber-700">Base Amount:</span>
+                              <span className="text-amber-900 font-medium">
+                                ${parseFloat(txForm.base_amount).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {txForm.gst_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-amber-700">
+                                GST ({txForm.gst_rate}%):
+                              </span>
+                              <span className="text-amber-900 font-medium">
+                                ${parseFloat(txForm.gst_amount).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {txForm.service_charge_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-amber-700">
+                                Service Charge ({txForm.service_charge_rate}%):
+                              </span>
+                              <span className="text-amber-900 font-medium">
+                                ${parseFloat(txForm.service_charge_amount).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-2 border-t border-amber-300">
+                            <span className="text-amber-900 font-medium">Total Amount:</span>
+                            <span className="text-amber-900 font-semibold">
+                              ${parseFloat(txForm.total_amount || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="splitEven"
+                          checked={txForm.splitEven}
+                          onChange={e => setTxForm(f => ({ ...f, splitEven: e.target.checked }))}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="splitEven" className="text-sm font-medium text-slate-700">
+                          Split amount evenly among participants
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {/* Participants Section */}
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+                        <Users className="w-5 h-5" />
+                        Participants
+                      </h4>
+                      <div className="text-xs text-slate-600">The creator of the transaction must be included and cannot be removed.</div>
+                      {txForm.participants.length > 0 ? (
+                        <div className="space-y-3 max-h-60 overflow-auto border border-slate-200 rounded-md p-4 bg-slate-50">
+                          {txForm.participants.map(p => {
+                            const isCreator = currentUser && p.user_id === currentUser.user_id;
+                            return (
+                              <div key={p.user_id} className="flex items-center gap-4 p-3 bg-white rounded-md border border-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={p.include}
+                                  onChange={e => updateParticipantInclude(p.user_id, e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  disabled={isCreator}
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-slate-900">
+                                    {p.username} {isCreator && <span className="text-xs text-slate-500">(creator)</span>}
+                                  </div>
+                                </div>
+                                {!txForm.splitEven && p.include && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-slate-600">$</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={p.amount_owed}
+                                      onChange={e => updateParticipantAmount(p.user_id, e.target.value)}
+                                      className="w-20 px-2 py-1 border border-slate-300 rounded text-sm bg-white text-slate-900"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                          <p className="text-sm">No participants available</p>
+                          <p className="text-xs">Select a circle to load participants</p>
+                        </div>
                       )}
-                    </p>
-                  </div>
-                )}
-
-                {/* Form Actions */}
-                <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={quickFormLoading}
-                    className="w-full sm:w-auto"
-                  >
-                    {quickFormLoading ? 'Creating...' : 'Create Transaction'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={resetQuickForm}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancel
-                  </Button>
+                      {!txForm.splitEven && txForm.participants.length > 0 && (
+                        <div className="text-xs text-slate-600 bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                          <strong>Note:</strong> When not splitting evenly, the sum of all participant amounts must equal the total amount.
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* External Participants Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+                          <Mail className="w-5 h-5" />
+                          External Participants
+                        </h4>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addExternalParticipant}
+                        >
+                          <UserPlus className="w-4 h-4 mr-1" />
+                          Add External
+                        </Button>
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        Add people who aren't in your circle. They'll receive email invites to view and pay their portion.
+                      </div>
+                      
+                      {txForm.external_participants.length > 0 && (
+                        <div className="space-y-3 max-h-60 overflow-auto border border-slate-200 rounded-md p-4 bg-slate-50">
+                          {txForm.external_participants.map(p => (
+                            <div key={p.id} className="flex items-center gap-4 p-3 bg-white rounded-md border border-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={p.include}
+                                onChange={e => updateExternalParticipantInclude(p.id, e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                              <div className="flex-1 grid grid-cols-2 gap-2">
+                                <input
+                                  type="email"
+                                  value={p.email}
+                                  onChange={e => updateExternalParticipant(p.id, 'email', e.target.value)}
+                                  placeholder="email@example.com"
+                                  className="text-sm px-2 py-1 border border-slate-300 rounded"
+                                  required={p.include}
+                                />
+                                <input
+                                  type="text"
+                                  value={p.name}
+                                  onChange={e => updateExternalParticipant(p.id, 'name', e.target.value)}
+                                  placeholder="Name (optional)"
+                                  className="text-sm px-2 py-1 border border-slate-300 rounded"
+                                />
+                              </div>
+                              {!txForm.splitEven && p.include && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-slate-600">$</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={p.amount_owed}
+                                    onChange={e => updateExternalParticipantAmount(p.id, e.target.value)}
+                                    className="w-20 text-sm px-2 py-1 border border-slate-300 rounded"
+                                  />
+                                </div>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeExternalParticipant(p.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {txForm.external_participants.length === 0 && (
+                        <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                          <Mail className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                          <p className="text-sm">No external participants added</p>
+                          <p className="text-xs">Click "Add External" to include people outside your circle</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4">
+                      <div className="flex items-center justify-end gap-3">
+                        <Button type="button" variant="outline" onClick={resetTransactionForm}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" variant="primary" disabled={creating}>
+                          {creating ? 'Creating...' : 'Create Transaction'}
+                        </Button>
+                      </div>
+                    </div>
+                  </form>
                 </div>
-              </form>
+              </div>
             </div>
           )}
 
@@ -831,14 +1521,26 @@ export default function Dashboard() {
                   </p>
                   <p className="text-sm text-slate-500">To friends</p>
                   {balances.owes > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto text-xs mt-2"
-                      onClick={() => setShowOwesModal(true)}
-                    >
-                      View & pay
-                    </Button>
+                    <div className="flex gap-1 mt-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto text-xs"
+                        onClick={() => setShowOwesModal(true)}
+                      >
+                        View details
+                      </Button>
+                      {getPendingTransactions().length > 1 && (
+                        <Button 
+                          variant="primary" 
+                          size="sm" 
+                          className="bg-red-600 hover:bg-red-700 p-1 h-auto text-xs"
+                          onClick={handleBulkPaymentOpen}
+                        >
+                          Pay All ({getPendingTransactions().length})
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -1260,6 +1962,31 @@ export default function Dashboard() {
                 ✕
               </Button>
             </div>
+            
+            {getPendingTransactions().length > 1 && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-slate-900">Pay All Pending</p>
+                    <p className="text-sm text-red-600">
+                      {getPendingTransactions().length} transactions • ${getPendingTransactions().reduce((sum, t) => sum + parseFloat(t.amount_owed || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={() => {
+                      setShowOwesModal(false);
+                      handleBulkPaymentOpen();
+                    }}
+                  >
+                    <CreditCard className="w-4 h-4 mr-1" />
+                    Pay All
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {balances.owesDetails && balances.owesDetails.length > 0 ? (
                 balances.owesDetails.map((person, index) => (
@@ -1357,6 +2084,49 @@ export default function Dashboard() {
                   </Badge>
                 </div>
               </div>
+
+              {/* GST and Service Charge Breakdown */}
+              {(selectedTransaction.gst_amount > 0 || selectedTransaction.service_charge_amount > 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-amber-900 mb-3">Amount Breakdown</h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedTransaction.base_amount && (
+                      <div className="flex justify-between">
+                        <span className="text-amber-700">Base Amount:</span>
+                        <span className="text-amber-900 font-medium">
+                          ${parseFloat(selectedTransaction.base_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedTransaction.gst_amount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-amber-700">
+                          GST ({(selectedTransaction.gst_rate * 100).toFixed(2)}%):
+                        </span>
+                        <span className="text-amber-900 font-medium">
+                          ${parseFloat(selectedTransaction.gst_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedTransaction.service_charge_amount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-amber-700">
+                          Service Charge ({(selectedTransaction.service_charge_rate * 100).toFixed(2)}%):
+                        </span>
+                        <span className="text-amber-900 font-medium">
+                          ${parseFloat(selectedTransaction.service_charge_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-amber-300">
+                      <span className="text-amber-900 font-medium">Total Amount:</span>
+                      <span className="text-amber-900 font-semibold">
+                        ${parseFloat(selectedTransaction.total_amount).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Transaction Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1477,6 +2247,112 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Payment Modal */}
+      {showBulkPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full m-4 max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900">Pay Multiple Transactions</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowBulkPayment(false)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-slate-600 mb-3">
+                Select the transactions you want to mark as paid:
+              </p>
+              
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {getPendingTransactions().map((transaction) => (
+                  <div key={transaction.id} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg">
+                    <input
+                      type="checkbox"
+                      id={`transaction-${transaction.id}`}
+                      checked={selectedTransactions.includes(transaction.id)}
+                      onChange={() => handleTransactionToggle(transaction.id)}
+                      className="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500"
+                    />
+                    <label htmlFor={`transaction-${transaction.id}`} className="flex-1 cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            {transaction.transaction?.name || transaction.name || 'Transaction'}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            {transaction.transaction?.circle?.name || transaction.circle?.name || 'Circle'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-slate-900">
+                            ${parseFloat(transaction.amount_owed || 0).toFixed(2)}
+                          </p>
+                          <Badge variant="red" className="text-xs">
+                            {transaction.payment_status || 'Pending'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-200 pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm text-slate-600">
+                    {selectedTransactions.length} transaction{selectedTransactions.length !== 1 ? 's' : ''} selected
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    Total: ${getTotalSelectedAmount().toFixed(2)}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowBulkPayment(false)}
+                    disabled={bulkPaymentLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={handleBulkPayment}
+                    disabled={bulkPaymentLoading || selectedTransactions.length === 0}
+                  >
+                    {bulkPaymentLoading ? (
+                      <span className="flex items-center gap-2">
+                        <Clock3 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" />
+                        Pay Selected ({selectedTransactions.length})
+                      </span>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> This will mark all selected transactions as "paid" in the system. 
+                  Make sure you've completed the actual payments before confirming.
+                </p>
+              </div>
             </div>
           </div>
         </div>

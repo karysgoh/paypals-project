@@ -79,6 +79,11 @@ export default function CircleDetail() {
     description: '',
     category: 'other',
     total_amount: '',
+    base_amount: '',
+    gst_rate: '9',
+    service_charge_rate: '10',
+    gst_amount: '',
+    service_charge_amount: '',
     splitEven: true,
     participants: [],
     external_participants: [],
@@ -679,6 +684,56 @@ export default function CircleDetail() {
     }));
   };
 
+  // Handle GST and service charge calculations
+  const handleFormChange = (field, value) => {
+    setTxForm(f => ({ ...f, [field]: value }));
+    
+    // Auto-calculate amounts when base amount or rates change
+    if (field === 'base_amount' || field === 'gst_rate' || field === 'service_charge_rate') {
+      const newData = { ...txForm, [field]: value };
+      const baseAmount = parseFloat(newData.base_amount) || 0;
+      const gstRate = parseFloat(newData.gst_rate) || 0;
+      const serviceChargeRate = parseFloat(newData.service_charge_rate) || 0;
+      
+      if (baseAmount > 0) {
+        const gstAmount = baseAmount * (gstRate / 100);
+        const serviceChargeAmount = baseAmount * (serviceChargeRate / 100);
+        const totalAmount = baseAmount + gstAmount + serviceChargeAmount;
+        
+        setTxForm(f => ({
+          ...f,
+          [field]: value,
+          gst_amount: gstAmount.toFixed(2),
+          service_charge_amount: serviceChargeAmount.toFixed(2),
+          total_amount: totalAmount.toFixed(2)
+        }));
+        return;
+      }
+    }
+    
+    // Auto-calculate base amount when total amount changes and rates are set
+    if (field === 'total_amount') {
+      const gstRate = parseFloat(txForm.gst_rate) || 0;
+      const serviceChargeRate = parseFloat(txForm.service_charge_rate) || 0;
+      const totalAmount = parseFloat(value) || 0;
+      
+      if (totalAmount > 0 && (gstRate > 0 || serviceChargeRate > 0)) {
+        const baseAmount = totalAmount / (1 + (gstRate / 100) + (serviceChargeRate / 100));
+        const gstAmount = baseAmount * (gstRate / 100);
+        const serviceChargeAmount = baseAmount * (serviceChargeRate / 100);
+        
+        setTxForm(f => ({
+          ...f,
+          [field]: value,
+          base_amount: baseAmount.toFixed(2),
+          gst_amount: gstAmount.toFixed(2),
+          service_charge_amount: serviceChargeAmount.toFixed(2)
+        }));
+        return;
+      }
+    }
+  };
+
   const handleCreateTransaction = async (e) => {
     e.preventDefault();
     setTxError(null);
@@ -756,6 +811,11 @@ export default function CircleDetail() {
       description: txForm.description,
       category: txForm.category,
       total_amount: total,
+      base_amount: txForm.base_amount ? parseFloat(txForm.base_amount) : undefined,
+      gst_rate: txForm.gst_rate ? parseFloat(txForm.gst_rate) / 100 : undefined,
+      service_charge_rate: txForm.service_charge_rate ? parseFloat(txForm.service_charge_rate) / 100 : undefined,
+      gst_amount: txForm.gst_amount ? parseFloat(txForm.gst_amount) : undefined,
+      service_charge_amount: txForm.service_charge_amount ? parseFloat(txForm.service_charge_amount) : undefined,
       participants: participantsPayload,
     };
     if (selectedPlace && selectedPlace.place_id) payload.place_id = selectedPlace.place_id;
@@ -784,6 +844,11 @@ export default function CircleDetail() {
         description: '',
         category: 'other',
         total_amount: '',
+        base_amount: '',
+        gst_rate: '9',
+        service_charge_rate: '10',
+        gst_amount: '',
+        service_charge_amount: '',
         splitEven: true,
         participants: txForm.participants.map(p => ({ ...p, amount_owed: 0, include: true })),
         external_participants: [],
@@ -1917,22 +1982,113 @@ export default function CircleDetail() {
                             <option value="other">Other</option>
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Total Amount *</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
+                        
+                        {/* GST and Service Charge Fields */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Base Amount (before charges)</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={txForm.base_amount}
+                                onChange={e => handleFormChange('base_amount', e.target.value)}
+                                className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Total Amount *</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={txForm.total_amount}
+                                onChange={e => handleFormChange('total_amount', e.target.value)}
+                                className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                                placeholder="0.00"
+                                required
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">GST Rate (%)</label>
                             <input
                               type="number"
                               step="0.01"
                               min="0"
-                              value={txForm.total_amount}
-                              onChange={e => setTxForm(f => ({ ...f, total_amount: e.target.value }))}
-                              className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
-                              placeholder="0.00"
-                              required
+                              max="100"
+                              value={txForm.gst_rate}
+                              onChange={e => handleFormChange('gst_rate', e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                              placeholder="9"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Service Charge Rate (%)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={txForm.service_charge_rate}
+                              onChange={e => handleFormChange('service_charge_rate', e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900"
+                              placeholder="10"
                             />
                           </div>
                         </div>
+                        
+                        {/* GST/Service Charge Breakdown */}
+                        {(txForm.gst_amount > 0 || txForm.service_charge_amount > 0) && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+                            <h5 className="text-sm font-medium text-amber-900 mb-3">Amount Breakdown</h5>
+                            <div className="space-y-2 text-sm">
+                              {txForm.base_amount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-amber-700">Base Amount:</span>
+                                  <span className="text-amber-900 font-medium">
+                                    ${parseFloat(txForm.base_amount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                              {txForm.gst_amount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-amber-700">
+                                    GST ({txForm.gst_rate}%):
+                                  </span>
+                                  <span className="text-amber-900 font-medium">
+                                    ${parseFloat(txForm.gst_amount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                              {txForm.service_charge_amount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-amber-700">
+                                    Service Charge ({txForm.service_charge_rate}%):
+                                  </span>
+                                  <span className="text-amber-900 font-medium">
+                                    ${parseFloat(txForm.service_charge_amount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex justify-between pt-2 border-t border-amber-300">
+                                <span className="text-amber-900 font-medium">Total Amount:</span>
+                                <span className="text-amber-900 font-semibold">
+                                  ${parseFloat(txForm.total_amount || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-4">
                         <h4 className="text-lg font-medium text-slate-900 flex items-center gap-2">

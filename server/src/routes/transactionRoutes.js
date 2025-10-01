@@ -57,6 +57,11 @@ router.patch(
     transactionController.updatePaymentStatus
 );
 
+router.patch(
+    '/bulk/status',
+    transactionController.bulkUpdatePaymentStatus
+);
+
 router.get(
     '/:transactionId',
     transactionController.getTransactionById

@@ -230,6 +230,13 @@ model Transaction {
   formatted_address String?       // Full formatted address
 
   total_amount   Decimal           @db.Decimal(14, 2)
+
+  gst_rate       Decimal?          @db.Decimal(5, 4) // e.g., 0.0700 for 7% GST
+  service_charge_rate Decimal?     @db.Decimal(5, 4) // e.g., 0.1000 for 10% service charge
+  gst_amount     Decimal?          @db.Decimal(14, 2)
+  service_charge_amount Decimal?   @db.Decimal(14, 2)
+  base_amount    Decimal?          @db.Decimal(14, 2) // Amount before GST/service charge
+  
   status         TransactionStatus @default(pending)
   created_by     Int
   expense_date   DateTime          @default(now())
