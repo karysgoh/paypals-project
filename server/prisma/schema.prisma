@@ -153,6 +153,10 @@ model User {
   email_verified Boolean    @default(false)
   role_id        Int?
   status         UserStatus @default(active)
+  
+  paynow_phone   String?    @db.VarChar(20)  
+  paynow_nric    String?    @db.VarChar(20) 
+  paynow_enabled Boolean    @default(false) 
 
   created_at   DateTime   @default(now())
   updated_at   DateTime   @updatedAt

@@ -128,6 +128,10 @@ router.patch('/transactions/external/:token/payment', transactionController.upda
 // Regular transaction routes (AUTH REQUIRED)
 router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
 
+// PayNow routes (AUTH REQUIRED)
+const payNowRoutes = require('../routes/payNowRoutes.js');
+router.use('/paynow', jwtMiddleware.verifyAccessToken, payNowRoutes);
+
 const mapsRoutes = require('../routes/mapsRoutes.js');
 router.use('/maps', mapsRoutes);
 

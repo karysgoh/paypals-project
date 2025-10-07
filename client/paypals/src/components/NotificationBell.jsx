@@ -314,7 +314,7 @@ export default function NotificationBell() {
         onClick={handleBellClick}
         className="relative p-2 text-slate-600 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 rounded-full"
       >
-        <Bell className="w-6 h-6" />
+        <Bell className="w-6 h-6 text-white" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold min-w-[20px] h-5 flex items-center justify-center rounded-full">
             {unreadCount > 99 ? '99+' : unreadCount}

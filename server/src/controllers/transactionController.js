@@ -642,12 +642,22 @@ module.exports = {
             const userId = res.locals.user_id;
             const { transaction_ids, payment_status, payment_method = 'bulk_payment' } = req.body;
 
+            logger.info('Bulk update payment status called', { 
+                userId, 
+                requestBody: req.body,
+                transaction_ids, 
+                payment_status, 
+                payment_method 
+            });
+
             // Validate input
             if (!transaction_ids || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+                logger.error('Validation failed: Transaction IDs array is required');
                 return next(new AppError('Transaction IDs array is required', 400));
             }
 
             if (!payment_status) {
+                logger.error('Validation failed: Payment status is required');
                 return next(new AppError('Payment status is required', 400));
             }
 

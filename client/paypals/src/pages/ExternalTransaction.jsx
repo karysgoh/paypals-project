@@ -348,34 +348,29 @@ export default function ExternalTransaction() {
                 </p>
               </div>
 
-              {/* NetsQR Payment Option */}
-              <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+              {/* PayNow Payment Option */}
+              <div className="border border-red-200 rounded-lg p-4 bg-red-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <QrCode className="w-6 h-6 text-blue-600" />
+                    <QrCode className="w-6 h-6 text-red-600" />
                     <div>
-                      <p className="font-medium text-blue-900">Pay with NetsQR</p>
-                      <p className="text-blue-700 text-sm">Secure QR code payment</p>
+                      <p className="font-medium text-slate-900">PayNow</p>
+                      <p className="text-slate-600 text-sm">Singapore's instant payment system</p>
                     </div>
                   </div>
-                  <Button
-                    variant="NetsQR"
-                    onClick={handleNetsQRPayment}
-                    disabled={paymentProcessing}
-                    className="min-w-[120px]"
-                  >
-                    {paymentProcessing ? (
-                      <span className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 animate-spin" />
-                        Loading...
-                      </span>
-                    ) : (
+                  <div className="flex-shrink-0">
+                    <Button
+                      variant="primary"
+                      onClick={() => alert('PayNow integration needed for external transactions')}
+                      disabled={paymentProcessing}
+                      className="min-w-[120px] bg-red-600 hover:bg-red-700"
+                    >
                       <span className="flex items-center gap-2">
                         <QrCode className="w-4 h-4" />
-                        Pay Now
+                        Pay with PayNow
                       </span>
-                    )}
-                  </Button>
+                    </Button>
+                  </div>
                 </div>
               </div>
 

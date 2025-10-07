@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
 import Notification from "../components/Notification";
 import { useNotification } from "../hooks/useNotification";
+
 import { 
   Plus, 
   Users, 
@@ -914,6 +915,25 @@ export default function Dashboard() {
     return transactionSummary.transactions
       .filter(t => selectedTransactions.includes(t.id))
       .reduce((sum, t) => sum + parseFloat(t.amount_owed || 0), 0);
+  };
+
+  // PayNow bulk payment handlers
+  const handleBulkPaymentSuccess = (result) => {
+    showNotification('Bulk payments processed successfully with PayNow!', 'success');
+    loadDashboardData();
+    setShowBulkPayment(false);
+    setSelectedTransactions([]);
+  };
+
+  const handleBulkPaymentError = (errorMessage) => {
+    showNotification(`PayNow bulk payment failed: ${errorMessage}`, 'error');
+  };
+
+  // Handler for opening payment modal for a specific person (multiple transactions)
+  const handlePersonPaymentOpen = (person) => {
+    // Set selected transactions to all transactions for this person
+    setSelectedTransactions(person.transactions.map(t => t.id));
+    setShowBulkPayment(true);
   };
 
   if (authLoading || isLoading) {
@@ -1998,9 +2018,25 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-red-600">${person.totalAmount.toFixed(2)}</p>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 text-xs">
-                          Pay now
-                        </Button>
+                        {person.transactions.length === 1 ? (
+                          // Single transaction - navigate to transaction details page
+                          <Link 
+                            to={`/transaction/${person.transactions[0].id}/pay`}
+                            className="inline-flex items-center justify-center text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                          >
+                            Pay now
+                          </Link>
+                        ) : (
+                          // Multiple transactions - open bulk payment modal for this person
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-600 hover:text-red-700 text-xs"
+                            onClick={() => handlePersonPaymentOpen(person)}
+                          >
+                            Pay now
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {person.transactions.length > 1 && (
@@ -2326,6 +2362,19 @@ export default function Dashboard() {
                   >
                     Cancel
                   </Button>
+                  
+                  {/* Navigate to individual payment page for single transactions */}
+                  {selectedTransactions.length === 1 && (
+                    <Link
+                      to={`/transaction/${selectedTransactions[0]}/pay`}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Go to Payment
+                    </Link>
+                  )}
+                  
+                  {/* Mark as Paid Button */}
                   <Button
                     variant="primary"
                     className="bg-red-600 hover:bg-red-700"
@@ -2339,8 +2388,8 @@ export default function Dashboard() {
                       </span>
                     ) : (
                       <span className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" />
-                        Pay Selected ({selectedTransactions.length})
+                        <CheckCircle className="w-4 h-4" />
+                        Mark as Paid ({selectedTransactions.length})
                       </span>
                     )}
                   </Button>
@@ -2349,8 +2398,10 @@ export default function Dashboard() {
               
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> This will mark all selected transactions as "paid" in the system. 
-                  Make sure you've completed the actual payments before confirming.
+                  <strong>💡 Payment Options:</strong>
+                  <br/>• <strong>Single transaction:</strong> Click "Go to Payment" for PayNow and other payment methods
+                  <br/>• <strong>Multiple transactions:</strong> Use "Mark as Paid" if you've completed payments separately
+                  <br/>• <strong>Manual payments:</strong> If paid by cash/other methods, use "Mark as Paid"
                 </p>
               </div>
             </div>
