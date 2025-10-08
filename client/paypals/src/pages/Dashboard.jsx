@@ -121,6 +121,14 @@ const api = {
   async getUserTransactionSummary() {
     return this.request(`/transactions/user/summary`);
   },
+
+  async sendPaymentReminder(userId, transactionId = null) {
+    const body = transactionId ? { transactionId } : {};
+    return this.request(`/transactions/reminder/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
 };
 
 // Fallback for createPageUrl
@@ -505,6 +513,24 @@ export default function Dashboard() {
   };
 
   const userName = currentUser?.name || currentUser?.username || currentUser?.email?.split('@')[0] || 'there';
+
+  // Send payment reminder function
+  const handleSendReminder = async (userId, userName) => {
+    try {
+      showNotification(`Sending payment reminder to ${userName}...`, 'info');
+      
+      const response = await api.sendPaymentReminder(userId);
+      
+      if (response.status === 'success') {
+        showNotification(`Payment reminder sent successfully to ${userName}!`, 'success');
+      } else {
+        showNotification(response.message || 'Failed to send payment reminder', 'error');
+      }
+    } catch (error) {
+      console.error('Error sending payment reminder:', error);
+      showNotification('Failed to send payment reminder. Please try again.', 'error');
+    }
+  };
 
   // Transaction form handlers (adapted from CircleDetail)
   const updateParticipantInclude = (user_id, include) => {
@@ -1009,6 +1035,16 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Link
+                to="/settings/payment"
+                className="flex items-center justify-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 w-full sm:w-auto"
+              >
+                <svg className="w-4 h-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Payment Settings
+              </Link>
               <Button 
                 variant="primary" 
                 size="md" 
@@ -1619,8 +1655,43 @@ export default function Dashboard() {
             </Card>
           </div>
 
+          {/* No Transactions State */}
+          {(!transactions || transactions.length === 0) && (
+            <div className="mb-8">
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-6">
+                    <DollarSign className="w-8 h-8 text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">No transactions yet</h3>
+                  <p className="text-base text-slate-600 mb-6">
+                    Start splitting expenses with your friends by creating your first transaction
+                  </p>
+                  <div className="space-y-3 sm:space-y-0 sm:space-x-3 sm:flex sm:justify-center">
+                    <Button 
+                      variant="primary" 
+                      size="md"
+                      onClick={() => setShowTransactionForm(true)}
+                      className="w-full sm:w-auto"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Transaction
+                    </Button>
+                    <Link 
+                      to="/circles"
+                      className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 w-full sm:w-auto"
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Manage Circles
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Detailed Balance Breakdown */}
-          {transactionSummary && transactionSummary.transactions && transactionSummary.transactions.length > 0 && (
+          {transactions && transactions.length > 0 && (
             <div className="mb-8">
               <h2 className="text-xl font-medium text-slate-900 mb-4">Outstanding Balances</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1634,37 +1705,37 @@ export default function Dashboard() {
                       <h3 className="text-lg font-medium text-slate-900">You Owe</h3>
                     </div>
                     <div className="space-y-3">
-                      {transactionSummary.transactions
-                        .filter(t => t.payment_status === 'unpaid')
+                      {transactions
+                        .filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0)
                         .slice(0, 5)
                         .map((transaction, index) => (
                         <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900 truncate">
-                              {transaction.transaction?.name || 'Transaction'}
+                              {transaction.name || 'Transaction'}
                             </p>
                             <p className="text-xs text-slate-500">
-                              {transaction.transaction?.circle?.name || 'Circle'}
+                              {transaction.circle?.name || 'Circle'}
                             </p>
                           </div>
                           <span className="text-sm font-semibold text-red-600">
-                            ${parseFloat(transaction.amount_owed || 0).toFixed(2)}
+                            ${parseFloat(transaction.user_amount_owed || 0).toFixed(2)}
                           </span>
                         </div>
                       ))}
-                      {transactionSummary.transactions.filter(t => t.payment_status === 'unpaid').length > 5 && (
+                      {transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length > 5 && (
                         <p className="text-xs text-slate-500 text-center pt-2">
-                          +{transactionSummary.transactions.filter(t => t.payment_status === 'unpaid').length - 5} more
+                          +{transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length - 5} more
                         </p>
                       )}
-                      {transactionSummary.transactions.filter(t => t.payment_status === 'unpaid').length === 0 && (
+                      {transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length === 0 && (
                         <p className="text-sm text-slate-500 text-center py-4">No outstanding debts</p>
                       )}
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* What You're Owed - This would need additional backend support */}
+                {/* What You're Owed */}
                 <Card>
                   <CardContent className="p-6">
                     <div className="flex items-center gap-3 mb-4">
@@ -1674,17 +1745,39 @@ export default function Dashboard() {
                       <h3 className="text-lg font-medium text-slate-900">You're Owed</h3>
                     </div>
                     <div className="space-y-3">
-                      <div className="text-center py-8">
-                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                          <DollarSign className="w-6 h-6 text-slate-400" />
+                      {balances?.owedToDetails && balances.owedToDetails.length > 0 ? (
+                        <>
+                          {balances.owedToDetails.slice(0, 5).map((detail, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-900 truncate">
+                                  {detail.userName}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {detail.transactions.length} transaction{detail.transactions.length !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold text-green-600">
+                                ${parseFloat(detail.totalAmount || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                          {balances.owedToDetails.length > 5 && (
+                            <p className="text-xs text-slate-500 text-center pt-2">
+                              +{balances.owedToDetails.length - 5} more
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                            <DollarSign className="w-6 h-6 text-slate-400" />
+                          </div>
+                          <p className="text-sm text-slate-500">
+                            No one owes you money
+                          </p>
                         </div>
-                        <p className="text-sm text-slate-500">
-                          Detailed breakdown coming soon
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Check individual circles for detailed information
-                        </p>
-                      </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1951,7 +2044,12 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-green-600">${person.totalAmount.toFixed(2)}</p>
-                        <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 text-xs">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-green-600 hover:text-green-700 text-xs"
+                          onClick={() => handleSendReminder(person.userId, person.userName)}
+                        >
                           Send reminder
                         </Button>
                       </div>

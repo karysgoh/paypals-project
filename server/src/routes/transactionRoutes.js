@@ -62,6 +62,11 @@ router.patch(
     transactionController.bulkUpdatePaymentStatus
 );
 
+router.post(
+    '/reminder/:userId',
+    transactionController.sendPaymentReminder
+);
+
 router.get(
     '/:transactionId',
     transactionController.getTransactionById

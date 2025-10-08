@@ -776,5 +776,128 @@ module.exports = {
             const mapped = mapTransactionError(error);
             return next(new AppError(mapped.message, mapped.status));
         }
+    }),
+
+    // Send payment reminder for specific user/transaction
+    sendPaymentReminder: catchAsync(async (req, res, next) => {
+        try {
+            const currentUserId = res.locals.user_id;
+            const { userId } = req.params; // The user we want to send a reminder to
+            const { transactionId } = req.body; // Optional: specific transaction, otherwise all pending transactions for this user
+
+            logger.info('Sending payment reminder', {
+                requestedBy: currentUserId,
+                targetUser: userId,
+                transactionId: transactionId || 'all_pending'
+            });
+
+            // Get pending transactions for the target user that the current user is involved with
+            let pendingTransactions;
+            
+            if (transactionId) {
+                // Send reminder for specific transaction
+                pendingTransactions = await transactionModel.getTransactionById(transactionId, currentUserId);
+                if (!pendingTransactions) {
+                    return next(new AppError('Transaction not found', 404));
+                }
+                
+                // Verify the current user has permission to send reminders for this transaction
+                if (pendingTransactions.created_by !== currentUserId) {
+                    return next(new AppError('You can only send reminders for transactions you created', 403));
+                }
+                
+                // Check if the target user is actually a participant with pending payment
+                const targetMember = pendingTransactions.members?.find(m => 
+                    m.user_id === parseInt(userId) && 
+                    (m.payment_status === 'pending' || m.payment_status === 'unpaid')
+                );
+                
+                if (!targetMember) {
+                    return next(new AppError('This user does not have a pending payment for this transaction', 400));
+                }
+                
+                pendingTransactions = [pendingTransactions];
+            } else {
+                // Send reminders for all pending transactions where current user is creator and target user owes money
+                pendingTransactions = await transactionModel.getUserTransactions(currentUserId);
+                pendingTransactions = pendingTransactions.filter(tx => 
+                    tx.created_by === currentUserId &&
+                    tx.members?.some(m => 
+                        m.user_id === parseInt(userId) && 
+                        (m.payment_status === 'pending' || m.payment_status === 'unpaid')
+                    )
+                );
+            }
+
+            if (!pendingTransactions || pendingTransactions.length === 0) {
+                return next(new AppError('No pending transactions found for reminder', 404));
+            }
+
+            let sentCount = 0;
+            const errors = [];
+
+            // Send reminders for each pending transaction
+            for (const transaction of pendingTransactions) {
+                try {
+                    const targetMember = transaction.members.find(m => 
+                        m.user_id === parseInt(userId) && 
+                        (m.payment_status === 'pending' || m.payment_status === 'unpaid')
+                    );
+
+                    if (targetMember && targetMember.user) {
+                        const reminderData = {
+                            transactionId: transaction.id,
+                            transactionName: transaction.name,
+                            amount: parseFloat(targetMember.amount_owed),
+                            circleName: transaction.circle?.name || 'Unknown Circle',
+                            creatorName: transaction.creator?.username || 'Unknown Creator',
+                            recipientName: targetMember.user.username
+                        };
+
+                        // Import email service here to avoid circular dependencies
+                        const { sendPaymentReminderEmail } = require('../utils/emailService');
+                        await sendPaymentReminderEmail(targetMember.user.email, reminderData);
+                        
+                        sentCount++;
+
+                        logger.info('Payment reminder sent successfully', {
+                            transactionId: transaction.id,
+                            targetUser: userId,
+                            targetEmail: targetMember.user.email
+                        });
+                    }
+                } catch (emailError) {
+                    logger.error('Failed to send payment reminder email', {
+                        transactionId: transaction.id,
+                        targetUser: userId,
+                        error: emailError.message
+                    });
+                    errors.push(`Failed to send reminder for transaction ${transaction.id}: ${emailError.message}`);
+                }
+            }
+
+            if (sentCount === 0) {
+                return next(new AppError('Failed to send any reminders', 500));
+            }
+
+            const responseMessage = sentCount === pendingTransactions.length 
+                ? `Successfully sent ${sentCount} payment reminder${sentCount > 1 ? 's' : ''}`
+                : `Sent ${sentCount} of ${pendingTransactions.length} reminders`;
+
+            res.status(200).json({
+                status: 'success',
+                message: responseMessage,
+                data: {
+                    reminders_sent: sentCount,
+                    total_transactions: pendingTransactions.length,
+                    errors: errors.length > 0 ? errors : undefined
+                }
+            });
+
+        } catch (error) {
+            logger.error(`Error sending payment reminder: ${error}`);
+            const mapped = mapTransactionError(error);
+            return next(new AppError(mapped.message, mapped.status));
+        }
     })
 };

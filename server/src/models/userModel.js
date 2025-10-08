@@ -140,7 +140,7 @@ module.exports = {
             const user = await prisma.user.findUnique({
                 where: { id: parseInt(userId, 10) },
                 select: {
-                    transactionParticipants: {
+                    transactionMembers: {
                         select: {
                             amount_owed: true,
                             payment_status: true,
@@ -148,8 +148,11 @@ module.exports = {
                                 select: {
                                     id: true,
                                     name: true,
+                                    total_amount: true,
+                                    created_at: true,
                                     circle: {
                                         select: {
+                                            id: true,
                                             name: true
                                         }
                                     }
@@ -164,7 +167,7 @@ module.exports = {
                 throw new Error(`User with ID ${userId} not found.`);
             }
 
-            return user.transactionParticipants;
+            return user.transactionMembers;
         } catch (error) {
             throw error;
         }
@@ -338,6 +341,87 @@ module.exports = {
             return users;
         } catch (error) {
             console.error('Error in findUsersByUsername:', error);
+            throw error;
+        }
+    },
+
+    updatePaymentMethods: async (userId, paymentData) => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // First, get the current user data
+                const currentUser = await tx.user.findUnique({
+                    where: { id: userId },
+                    select: {
+                        id: true,
+                        username: true,
+                        paynow_phone: true,
+                        paynow_nric: true,
+                        paynow_enabled: true
+                    }
+                });
+
+                if (!currentUser) {
+                    throw new Error('User not found');
+                }
+
+                // Update the payment methods
+                const updatedUser = await tx.user.update({
+                    where: { id: userId },
+                    data: {
+                        paynow_phone: paymentData.paynow_phone || null,
+                        paynow_nric: paymentData.paynow_nric || null,
+                        paynow_enabled: paymentData.paynow_enabled || false
+                    },
+                    select: {
+                        id: true,
+                        username: true,
+                        paynow_phone: true,
+                        paynow_nric: true,
+                        paynow_enabled: true
+                    }
+                });
+
+                // Create audit log for payment method update
+                await tx.auditLog.create({
+                    data: {
+                        performed_by: userId,
+                        action_type: 'update',
+                        target_entity: 'user',
+                        target_id: userId,
+                        description: `User "${currentUser.username}" updated payment methods - PayNow enabled: ${paymentData.paynow_enabled || false}`
+                    }
+                });
+
+                return updatedUser;
+            });
+
+            return result;
+        } catch (error) {
+            console.error('Error in updatePaymentMethods:', error);
+            throw error;
+        }
+    },
+
+    getPaymentMethods: async (userId) => {
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    username: true,
+                    paynow_phone: true,
+                    paynow_nric: true,
+                    paynow_enabled: true
+                }
+            });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            return user;
+        } catch (error) {
+            console.error('Error in getPaymentMethods:', error);
             throw error;
         }
     }

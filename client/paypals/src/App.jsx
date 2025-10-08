@@ -17,6 +17,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import Tutorial from "./pages/Tutorial";
 import ExternalTransaction from "./pages/ExternalTransaction";
 import TransactionPayment from "./pages/TransactionPayment";
+import PaymentSettings from "./pages/PaymentSettings";
 
 // ProtectedRoute component to handle authentication checks
 const ProtectedRoute = () => {
@@ -57,6 +58,7 @@ function App() {
               <Route path="/circles/:id" element={<CircleDetail />} />
               <Route path="/circles/sample" element={<SampleCircle />} />
               <Route path="/transactions" element={<AllTransactions />} />
+              <Route path="/settings/payment" element={<PaymentSettings />} />
             </Route>
           </Route>
         </Routes>

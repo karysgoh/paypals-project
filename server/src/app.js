@@ -122,52 +122,52 @@ app.use(
 // });
 
 // ADVANCED RATE LIMITING
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Only 5 failed attempts per 15 minutes
-  skipSuccessfulRequests: true,
-  message: {
-    status: 'error',
-    message: 'Too many login attempts, please try again later',
-  },
-  store: new rateLimit.MemoryStore(), 
-  keyGenerator: (req) => `login_${req.ip}_${req.body?.username || 'unknown'}`,
-});
+// const loginLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 5, // Only 5 failed attempts per 15 minutes
+//   skipSuccessfulRequests: true,
+//   message: {
+//     status: 'error',
+//     message: 'Too many login attempts, please try again later',
+//   },
+//   store: new rateLimit.MemoryStore(), 
+//   keyGenerator: (req) => `login_${req.ip}_${req.body?.username || 'unknown'}`,
+// });
 
-app.use('/api/login', loginLimiter);
+// app.use('/api/login', loginLimiter);
 
-const createRoleRateLimiter = (windowMs, max, keyPrefix) => rateLimit({
-  windowMs,
-  max,
-  message: {
-    status: 'error',
-    message: `Too many requests, please try again later`,
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new rateLimit.MemoryStore(), 
-  keyGenerator: (req) => `${keyPrefix}_${req.ip}`,
-});
+// const createRoleRateLimiter = (windowMs, max, keyPrefix) => rateLimit({
+//   windowMs,
+//   max,
+//   message: {
+//     status: 'error',
+//     message: `Too many requests, please try again later`,
+//   },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   store: new rateLimit.MemoryStore(), 
+//   keyGenerator: (req) => `${keyPrefix}_${req.ip}`,
+// });
 
-const adminLimiter = createRoleRateLimiter(60 * 1000, 100, 'admin');
-const advancedLimiter = createRoleRateLimiter(60 * 1000, 80, 'advanced');
-const generalLimiter = createRoleRateLimiter(60 * 1000, 50, 'general');
+// const adminLimiter = createRoleRateLimiter(60 * 1000, 100, 'admin');
+// const advancedLimiter = createRoleRateLimiter(60 * 1000, 80, 'advanced');
+// const generalLimiter = createRoleRateLimiter(60 * 1000, 50, 'general');
 
-app.use((req, res, next) => {
-  const userRole = res.locals?.role_id || 'user';
-  switch (userRole) {
-    case 'super_admin':
-    case 'admin':
-      adminLimiter(req, res, next);
-      break;
-    case 'content_manager':
-    case 'moderator':
-      advancedLimiter(req, res, next);
-      break;
-    default:
-      generalLimiter(req, res, next);
-  }
-});
+// app.use((req, res, next) => {
+//   const userRole = res.locals?.role_id || 'user';
+//   switch (userRole) {
+//     case 'super_admin':
+//     case 'admin':
+//       adminLimiter(req, res, next);
+//       break;
+//     case 'content_manager':
+//     case 'moderator':
+//       advancedLimiter(req, res, next);
+//       break;
+//     default:
+//       generalLimiter(req, res, next);
+//   }
+// });
 
 // LOGGING MIDDLEWARE
 app.use((req, res, next) => {

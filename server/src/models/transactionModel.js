@@ -797,7 +797,7 @@ module.exports = {
             });
 
             if(!userTransactions || userTransactions.length === 0){
-                throw new Error('No transactions found for this user');
+                return []; // Return empty array instead of throwing error
             }
 
             // Transform the data to include user-specific information

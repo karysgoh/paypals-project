@@ -327,5 +327,75 @@ module.exports = {
         count: users.length
       }
     });
+  }),
+
+  getPaymentMethods: catchAsync(async (req, res, next) => {
+    const user_id = res.locals.user_id;
+    
+    if (!user_id) {
+      logger.warn("Get payment methods failed: Missing user ID");
+      return next(new AppError("User ID is required", 400));
+    }
+
+    const paymentMethods = await userModel.getPaymentMethods(user_id);
+    
+    logger.debug(`Retrieved payment methods for user: ${user_id}`);
+    res.status(200).json({
+      status: "success",
+      data: paymentMethods
+    });
+  }),
+
+  updatePaymentMethods: catchAsync(async (req, res, next) => {
+    const user_id = res.locals.user_id;
+    const { paynow_phone, paynow_nric, paynow_enabled } = req.body;
+    
+    if (!user_id) {
+      logger.warn("Update payment methods failed: Missing user ID");
+      return next(new AppError("User ID is required", 400));
+    }
+
+    // Validate PayNow phone number format (Singapore format)
+    if (paynow_phone && !/^(\+65)?[689]\d{7}$/.test(paynow_phone.replace(/\s+/g, ''))) {
+      logger.warn(`Update payment methods failed: Invalid phone number format for user ${user_id}`);
+      return next(new AppError("Invalid Singapore phone number format. Please use format: +65XXXXXXXX or 8XXXXXXX", 400));
+    }
+
+    // Validate NRIC format (basic validation for Singapore NRIC/FIN)
+    if (paynow_nric && !/^[STFG]\d{7}[A-Z]$/i.test(paynow_nric)) {
+      logger.warn(`Update payment methods failed: Invalid NRIC format for user ${user_id}`);
+      return next(new AppError("Invalid NRIC/FIN format. Please use format: S1234567A", 400));
+    }
+
+    // Normalize phone number (ensure it has +65 prefix)
+    let normalizedPhone = null;
+    if (paynow_phone) {
+      const cleanPhone = paynow_phone.replace(/\s+/g, '');
+      if (cleanPhone.startsWith('+65')) {
+        normalizedPhone = cleanPhone;
+      } else if (cleanPhone.match(/^[689]\d{7}$/)) {
+        normalizedPhone = '+65' + cleanPhone;
+      } else {
+        normalizedPhone = cleanPhone;
+      }
+    }
+
+    // Normalize NRIC (uppercase)
+    const normalizedNRIC = paynow_nric ? paynow_nric.toUpperCase() : null;
+
+    const paymentData = {
+      paynow_phone: normalizedPhone,
+      paynow_nric: normalizedNRIC,
+      paynow_enabled: Boolean(paynow_enabled)
+    };
+
+    const updatedPaymentMethods = await userModel.updatePaymentMethods(user_id, paymentData);
+    
+    logger.info(`Payment methods updated for user: ${user_id}`);
+    res.status(200).json({
+      status: "success",
+      message: "Payment methods updated successfully",
+      data: updatedPaymentMethods
+    });
   })
 };

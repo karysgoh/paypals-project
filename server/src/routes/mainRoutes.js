@@ -96,6 +96,12 @@ router.get('/users/search', jwtMiddleware.verifyAccessToken, userController.sear
 // [POST] Check if email belongs to a registered user
 router.post('/users/check-email', jwtMiddleware.verifyAccessToken, userController.findUserByEmail);
 
+// [GET] Get user payment methods
+router.get('/users/payment-methods', jwtMiddleware.verifyAccessToken, userController.getPaymentMethods);
+
+// [PUT] Update user payment methods
+router.put('/users/payment-methods', jwtMiddleware.verifyAccessToken, userController.updatePaymentMethods);
+
 router.post("/logout", (req, res) => {
   res.clearCookie("authToken", {
     httpOnly: true,
