@@ -229,6 +229,16 @@ const notificationModel = {
             return await this.createBulkNotifications(notifications);
         }
     },
+
+    async notifyInvitationExpired(userId, circleName, circleId) {
+        return await this.createNotification(
+            userId,
+            'general',
+            'Invitation Expired',
+            `Your invitation to join "${circleName}" has expired`,
+            { circleId }
+        );
+    },
 };
 
 module.exports = notificationModel;

@@ -163,6 +163,29 @@ module.exports = {
 		const userId = res.locals.user_id;
 		const { page, limit, status, sortBy, sortOrder } = req.query;
 		try {
+			// First, check for and process any newly expired invitations
+			const expiredResult = await invitationModel.cleanupExpiredInvitations();
+			
+			// Create notifications for users whose invitations just expired
+			if (expiredResult.expiredInvitations.length > 0) {
+				for (const expiredInvitation of expiredResult.expiredInvitations) {
+					if (expiredInvitation.invitee_id) {
+						try {
+							await notificationModel.notifyInvitationExpired(
+								expiredInvitation.invitee_id,
+								expiredInvitation.circle.name,
+								expiredInvitation.circle.id
+							);
+						} catch (notificationError) {
+							logger.error('Error creating expiration notification', { 
+								error: notificationError.message,
+								invitationId: expiredInvitation.id
+							});
+						}
+					}
+				}
+			}
+
 			const result = await invitationModel.readUserInvitations(userId, { page, limit, status, sortBy, sortOrder });
 			res.status(200).json({ status: 'success', data: result });
 		} catch (error) {

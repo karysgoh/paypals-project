@@ -386,11 +386,27 @@ export default function Dashboard() {
         const data = await response.json();
         // Access invitations from the correct nested structure
         const allInvitations = data.data?.invitations || [];
+        
         // Filter for pending invitations only
         const pendingInvitations = allInvitations.filter(invitation => 
           invitation.status === 'pending'
         );
         setInvitations(pendingInvitations);
+        
+        // Check for recently expired invitations to show notifications
+        const expiredInvitations = allInvitations.filter(invitation => 
+          invitation.status === 'expired' && 
+          new Date(invitation.expires_at) > new Date(Date.now() - 24 * 60 * 60 * 1000) // Within last 24 hours
+        );
+        
+        // Show notification for expired invitations
+        if (expiredInvitations.length > 0) {
+          const expiredNames = expiredInvitations.map(inv => inv.circle?.name).join(', ');
+          showNotification(
+            `${expiredInvitations.length} invitation${expiredInvitations.length > 1 ? 's' : ''} expired: ${expiredNames}`, 
+            'warning'
+          );
+        }
       } else if (response.status === 401) {
         console.warn('Authentication required for invitations');
         // Don't show error to user, just fail silently for invitations
@@ -405,7 +421,7 @@ export default function Dashboard() {
         console.warn('Error loading invitations:', error);
       }
     }
-  }, [currentUser]);
+  }, [currentUser, showNotification]);
 
   const handleAcceptInvitation = async (invitationId) => {
     try {

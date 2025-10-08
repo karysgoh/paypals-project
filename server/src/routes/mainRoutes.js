@@ -118,6 +118,9 @@ router.use('/circles', circleRoutes);
 const invitationRoutes = require('../routes/invitationRoutes.js');
 router.use('/invitations', invitationRoutes);
 
+const cleanupRoutes = require('../routes/cleanupRoutes.js');
+router.use('/cleanup', cleanupRoutes);
+
 const transactionRoutes = require('../routes/transactionRoutes.js');
 const transactionController = require('../controllers/transactionController.js');
 

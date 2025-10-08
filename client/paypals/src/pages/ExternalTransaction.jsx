@@ -284,8 +284,8 @@ export default function ExternalTransaction() {
           <div className="mt-6 p-4 bg-slate-50 rounded-lg">
             <h3 className="font-medium text-slate-900 mb-2">Transaction Details</h3>
             <div className="space-y-1 text-sm text-slate-600">
-              <p><span className="text-slate-600">Created by:</span> <span className="font-medium">{transaction.creator?.username}</span></p>
-              <p><span className="text-slate-600">Circle:</span> <span className="font-medium">{transaction.circle?.name}</span></p>
+              <p><span className="text-slate-600">Created by:</span> <span className="font-medium text-slate-900">{transaction.creator?.username}</span></p>
+              <p><span className="text-slate-600">Circle:</span> <span className="font-medium">{transaction.circle?.circle_name}</span></p>
               <p><span className="text-slate-600">Category:</span> <span className="font-medium">{transaction.category || 'General'}</span></p>
               <p><span className="text-slate-600">Date:</span> <span className="font-medium">{new Date(transaction.created_at).toLocaleDateString()}</span></p>
               {transaction.location_name && (

@@ -94,7 +94,25 @@ export default function Circles() {
       const res = await fetch('http://localhost:3000/api/invitations/my', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch invitations');
       const result = await res.json();
-      setInvitations(result.data.invitations || []);
+      const allInvitations = result.data.invitations || [];
+      
+      // Set all invitations for display (including expired ones)
+      setInvitations(allInvitations);
+      
+      // Check for recently expired invitations to show notifications
+      const expiredInvitations = allInvitations.filter(invitation => 
+        invitation.status === 'expired' && 
+        new Date(invitation.expires_at) > new Date(Date.now() - 24 * 60 * 60 * 1000) // Within last 24 hours
+      );
+      
+      // Show notification for expired invitations
+      if (expiredInvitations.length > 0) {
+        const expiredNames = expiredInvitations.map(inv => inv.circle?.name).join(', ');
+        showNotification(
+          `${expiredInvitations.length} invitation${expiredInvitations.length > 1 ? 's' : ''} expired: ${expiredNames}`, 
+          'warning'
+        );
+      }
     } catch (error) {
       console.error('Error loading invitations:', error);
     }
@@ -360,39 +378,65 @@ export default function Circles() {
         {/* Pending Invitations */}
         {invitations.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-6">Pending Invitations</h2>
+            <h2 className="text-2xl font-semibold text-slate-900 mb-6">
+              Invitations ({invitations.filter(inv => inv.status === 'pending').length} pending, {invitations.filter(inv => inv.status === 'expired').length} expired)
+            </h2>
             <div className="space-y-4">
               {invitations.map(invite => (
                 <Card key={invite.id}>
-                  <div className="flex items-center justify-between">
+                  <div className={`flex items-center justify-between ${invite.status === 'expired' ? 'opacity-60' : ''}`}>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
-                        <UserPlus className="w-6 h-6 text-slate-600" />
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                        invite.status === 'expired' ? 'bg-red-100' : 'bg-slate-100'
+                      }`}>
+                        <UserPlus className={`w-6 h-6 ${
+                          invite.status === 'expired' ? 'text-red-600' : 'text-slate-600'
+                        }`} />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-slate-900">{invite.circle?.name || 'Circle'}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900">{invite.circle?.name || 'Circle'}</h3>
+                          {invite.status === 'expired' && (
+                            <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                              Expired
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-slate-600">
                           Invited by {invite.inviter?.username || invite.inviter_id}
+                          {invite.status === 'expired' && (
+                            <span className="text-red-600 ml-2">
+                              • Expired {new Date(invite.expires_at).toLocaleDateString()}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleAcceptInvitation(invite.id)}
-                        disabled={processingInvitation === invite.id}
-                      >
-                        {processingInvitation === invite.id ? 'Accepting...' : 'Accept'}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleRejectInvitation(invite.id)}
-                        disabled={processingInvitation === invite.id}
-                      >
-                        {processingInvitation === invite.id ? 'Declining...' : 'Decline'}
-                      </Button>
+                      {invite.status === 'pending' ? (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleAcceptInvitation(invite.id)}
+                            disabled={processingInvitation === invite.id}
+                          >
+                            {processingInvitation === invite.id ? 'Accepting...' : 'Accept'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleRejectInvitation(invite.id)}
+                            disabled={processingInvitation === invite.id}
+                          >
+                            {processingInvitation === invite.id ? 'Declining...' : 'Decline'}
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="text-sm text-red-600 font-medium">
+                          This invitation has expired
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>

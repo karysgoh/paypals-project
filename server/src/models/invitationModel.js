@@ -248,6 +248,40 @@ module.exports = {
             const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
             const skip = (pageNum - 1) * limitNum;
 
+            // First, cleanup expired invitations for this user
+            await prisma.$transaction(async (tx) => {
+                const expiredInvitations = await tx.invitation.findMany({
+                    where: {
+                        invitee_id: userId,
+                        status: 'pending',
+                        expires_at: { lt: new Date() }
+                    }
+                });
+
+                if (expiredInvitations.length > 0) {
+                    // Update expired invitations
+                    await tx.invitation.updateMany({
+                        where: {
+                            id: { in: expiredInvitations.map(inv => inv.id) }
+                        },
+                        data: { status: 'expired' }
+                    });
+
+                    // Create audit logs for expired invitations
+                    for (const invitation of expiredInvitations) {
+                        await tx.auditLog.create({
+                            data: {
+                                performed_by: null, // System action
+                                action_type: 'expire_invitation',
+                                target_entity: 'circle',
+                                target_id: invitation.circle_id,
+                                description: `User invitation expired automatically`
+                            }
+                        });
+                    }
+                }
+            });
+
             const where = {
                 invitee_id: userId,
                 ...(status ? { status } : {})
@@ -388,6 +422,79 @@ module.exports = {
             return invitations;
         } catch (error) {
             console.error('Error getting circle invitations:', error);
+            throw error;
+        }
+    },
+
+    cleanupExpiredInvitations: async () => {
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                // Find all expired pending invitations
+                const expiredInvitations = await tx.invitation.findMany({
+                    where: {
+                        status: 'pending',
+                        expires_at: { lt: new Date() }
+                    },
+                    include: {
+                        invitee: { select: { id: true, username: true } },
+                        circle: { select: { id: true, name: true } },
+                        inviter: { select: { id: true, username: true } }
+                    }
+                });
+
+                if (expiredInvitations.length === 0) {
+                    return { expiredCount: 0, expiredInvitations: [] };
+                }
+
+                // Update status to expired
+                await tx.invitation.updateMany({
+                    where: {
+                        id: { in: expiredInvitations.map(inv => inv.id) },
+                        status: 'pending'
+                    },
+                    data: { status: 'expired' }
+                });
+
+                // Create audit logs for expired invitations
+                for (const invitation of expiredInvitations) {
+                    await tx.auditLog.create({
+                        data: {
+                            performed_by: null, // System action
+                            action_type: 'expire_invitation',
+                            target_entity: 'circle',
+                            target_id: invitation.circle_id,
+                            description: `Invitation to ${invitation.invitee?.username || invitation.email || 'user'} expired`
+                        }
+                    });
+                }
+
+                return { 
+                    expiredCount: expiredInvitations.length, 
+                    expiredInvitations 
+                };
+            });
+
+            return result;
+        } catch (error) {
+            console.error('Error cleaning up expired invitations:', error);
+            throw error;
+        }
+    },
+
+    removeOldExpiredInvitations: async (daysOld = 30) => {
+        try {
+            const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+            
+            const deletedInvitations = await prisma.invitation.deleteMany({
+                where: {
+                    status: 'expired',
+                    expires_at: { lt: cutoffDate }
+                }
+            });
+
+            return { deletedCount: deletedInvitations.count };
+        } catch (error) {
+            console.error('Error removing old expired invitations:', error);
             throw error;
         }
     }
