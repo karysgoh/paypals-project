@@ -1025,12 +1025,12 @@ export default function Dashboard() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="px-4 sm:px-8 pt-10 sm:pt-12 pb-6 sm:pb-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
             <div>
-        <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">
+              <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">
                 Welcome back, {userName}
               </h1>
-        <p className="text-base sm:text-lg text-slate-600">
+              <p className="text-base sm:text-lg text-slate-600">
                 Here's what's happening with your transactions
               </p>
             </div>
@@ -1048,7 +1048,7 @@ export default function Dashboard() {
               <Button 
                 variant="primary" 
                 size="md" 
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto text-slate-900"
                 onClick={() => setShowTransactionForm(true)}
               >
                 <Plus className="w-5 h-5 mr-1.5" />
@@ -1550,109 +1550,57 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Balance Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" data-tour="balance-card">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                  </div>
-                  <Badge variant="green">You're owed</Badge>
+          {/* Hero Section - Consolidated Balance Overview */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-700 rounded-xl p-6 text-white">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold mb-2">Welcome back, {userName}! 👋</h1>
+                  <p className="text-slate-300">Here's your financial overview: </p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
-                    ${(balances.owedTo || 0).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-slate-500">From friends</p>
-                  {balances.owedTo > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-green-600 hover:text-green-700 hover:bg-green-50 p-1 h-auto text-xs mt-2"
-                      onClick={() => setShowOwedToModal(true)}
-                    >
-                      View details
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                    <TrendingDown className="w-5 h-5 text-red-600" />
-                  </div>
-                  <Badge variant="red">You owe</Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
-                    ${(balances.owes || 0).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-slate-500">To friends</p>
-                  {balances.owes > 0 && (
-                    <div className="flex gap-1 mt-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto text-xs"
-                        onClick={() => setShowOwesModal(true)}
-                      >
-                        View details
-                      </Button>
-                      {getPendingTransactions().length > 1 && (
-                        <Button 
-                          variant="primary" 
-                          size="sm" 
-                          className="bg-red-600 hover:bg-red-700 p-1 h-auto text-xs"
-                          onClick={handleBulkPaymentOpen}
-                        >
-                          Pay All ({getPendingTransactions().length})
-                        </Button>
-                      )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-green-400" />
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-blue-600" />
+                    <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">You're owed</span>
                   </div>
-                  <Badge variant="blue">Net balance</Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
-                    ${Math.abs(balances.net || 0).toFixed(2)}
+                  <p className="text-2xl font-bold">${(balances.owedTo || 0).toFixed(2)}</p>
+                  <p className="text-sm text-slate-300">
+                    {balances.owedToDetails?.length || 0} people owe you
                   </p>
-                  <p className="text-sm text-slate-500">
+                </div>
+
+                <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+                      <TrendingDown className="w-4 h-4 text-red-400" />
+                    </div>
+                    <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded-full">You owe</span>
+                  </div>
+                  <p className="text-2xl font-bold">${(balances.owes || 0).toFixed(2)}</p>
+                  <p className="text-sm text-slate-300">
+                    {balances.owesDetails?.length || 0} pending payments
+                  </p>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full">Net balance</span>
+                  </div>
+                  <p className="text-2xl font-bold">${Math.abs(balances.net || 0).toFixed(2)}</p>
+                  <p className="text-sm text-slate-300">
                     {balances.net >= 0 ? 'In your favor' : 'You owe overall'}
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <Clock3 className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <Badge variant="default">Pending</Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-2xl sm:text-3xl font-semibold text-slate-900">
-                    {balances.pendingCount || 0}
-                  </p>
-                  <p className="text-sm text-slate-500">Transactions</p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* No Transactions State */}
@@ -1690,333 +1638,372 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Detailed Balance Breakdown */}
+          {/* Smart Activity Feed - Combines Outstanding Balances + Recent Activity */}
           {transactions && transactions.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-medium text-slate-900 mb-4">Outstanding Balances</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* What You Owe */}
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                        <TrendingDown className="w-4 h-4 text-red-600" />
-                      </div>
-                      <h3 className="text-lg font-medium text-slate-900">You Owe</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              {/* Main Activity Feed */}
+              <div className="lg:col-span-2">
+                <div className="mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-medium text-slate-900">Activity & Actions</h2>
+                      <p className="text-base text-slate-500">Pending payments and recent transactions</p>
                     </div>
-                    <div className="space-y-3">
-                      {transactions
-                        .filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0)
-                        .slice(0, 5)
-                        .map((transaction, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-900 truncate">
-                              {transaction.name || 'Transaction'}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {transaction.circle?.name || 'Circle'}
-                            </p>
-                          </div>
-                          <span className="text-sm font-semibold text-red-600">
-                            ${parseFloat(transaction.user_amount_owed || 0).toFixed(2)}
-                          </span>
-                        </div>
-                      ))}
-                      {transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length > 5 && (
-                        <p className="text-xs text-slate-500 text-center pt-2">
-                          +{transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length - 5} more
-                        </p>
-                      )}
-                      {transactions.filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0).length === 0 && (
-                        <p className="text-sm text-slate-500 text-center py-4">No outstanding debts</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* What You're Owed */}
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4 text-green-600" />
-                      </div>
-                      <h3 className="text-lg font-medium text-slate-900">You're Owed</h3>
-                    </div>
-                    <div className="space-y-3">
-                      {balances?.owedToDetails && balances.owedToDetails.length > 0 ? (
-                        <>
-                          {balances.owedToDetails.slice(0, 5).map((detail, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-900 truncate">
-                                  {detail.userName}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  {detail.transactions.length} transaction{detail.transactions.length !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                              <span className="text-sm font-semibold text-green-600">
-                                ${parseFloat(detail.totalAmount || 0).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
-                          {balances.owedToDetails.length > 5 && (
-                            <p className="text-xs text-slate-500 text-center pt-2">
-                              +{balances.owedToDetails.length - 5} more
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-center py-8">
-                          <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                            <DollarSign className="w-6 h-6 text-slate-400" />
-                          </div>
-                          <p className="text-sm text-slate-500">
-                            No one owes you money
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="px-4 sm:px-8 pb-12">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Recent Activity */}
-            <div className="lg:col-span-2">
-              <div className="mb-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-medium text-slate-900">Recent Activity</h2>
-                    <p className="text-base text-slate-500">Your latest transactions</p>
-                  </div>
-                  <div className="text-right">
-                    {balances.totalTransactions > transactions.length && (
-                      <p className="text-sm text-slate-600">
-                        Showing {transactions.length} of {balances.totalTransactions} transactions
-                      </p>
-                    )}
-                    {balances.pendingCount > 0 && (
-                      <p className="text-xs text-amber-600 mb-1">
-                        {balances.pendingCount} pending transactions
-                      </p>
-                    )}
                     <Link 
                       to="/transactions" 
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      className="text-sm text-blue-600 hover:text-blue-800 underline"
                     >
-                      View all transactions →
+                      View all →
                     </Link>
                   </div>
                 </div>
-              </div>
 
-              <Card>
-                <CardContent className="p-0">
-                  {transactions.length === 0 ? (
-                    <div className="p-12 text-center">
-                      <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                        <DollarSign className="w-7 h-7 text-slate-400" />
-                      </div>
-                      <p className="text-base text-slate-600 font-medium mb-1">No recent activity</p>
-                      <p className="text-sm text-slate-500">Start by adding your first transaction</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {transactions.map((transaction) => {
-                        const isPaid = transaction.user_payment_status === 'paid' || transaction.payment_status === 'paid';
-                        const isCreator = transaction.created_by === currentUser?.user_id;
-                        
-                        return (
-                        <div key={transaction.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              isPaid ? 'bg-green-100' : 'bg-slate-100'
-                            }`}>
-                              <DollarSign className={`w-5 h-5 ${
-                                isPaid ? 'text-green-600' : 'text-slate-600'
-                              }`} />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-slate-900 text-base">
-                                  {transaction.description || transaction.name || 'Transaction'}
-                                </p>
-                                {isCreator && (
-                                  <Badge variant="blue" className="text-xs">Creator</Badge>
-                                )}
+                <Card>
+                  <CardContent className="p-0">
+                    {/* Priority Section: Outstanding Payments (What you owe) */}
+                    {balances.owes > 0 && (
+                      <div className="border-b border-slate-200">
+                        <div className="p-4 bg-red-50">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                                <TrendingDown className="w-3 h-3 text-red-600" />
                               </div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm text-slate-500">
+                              <h3 className="font-medium text-red-900">Action Required: You Owe</h3>
+                            </div>
+                            {getPendingTransactions().length > 1 && (
+                              <Button 
+                                variant="primary" 
+                                size="sm" 
+                                className="bg-red-600 hover:bg-red-700 text-xs"
+                                onClick={handleBulkPaymentOpen}
+                              >
+                                Pay All ({getPendingTransactions().length})
+                              </Button>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {transactions
+                              .filter(t => (t.user_payment_status === 'unpaid' || t.user_payment_status === 'pending') && parseFloat(t.user_amount_owed || 0) > 0)
+                              .slice(0, 3)
+                              .map((transaction, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-red-200">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-900 truncate">
+                                    {transaction.name || 'Transaction'}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    {transaction.circle?.name || 'Circle'} • Created {new Date(transaction.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    ${parseFloat(transaction.user_amount_owed || 0).toFixed(2)}
+                                  </span>
+                                  <button 
+                                    className="p-1 hover:bg-slate-100 rounded" 
+                                    onClick={() => handleShowTransactionDetails(transaction)}
+                                  >
+                                    <MoreHorizontal className="w-4 h-4 text-slate-400" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent Activity */}
+                    <div className="p-4">
+                      <h3 className="font-medium text-slate-900 mb-3">Recent Transactions</h3>
+                      <div className="space-y-2">
+                        {transactions.slice(0, 5).map((transaction) => {
+                          const isPaid = transaction.user_payment_status === 'paid' || transaction.payment_status === 'paid';
+                          const isCreator = transaction.created_by === currentUser?.user_id;
+                          
+                          return (
+                          <div key={transaction.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                isPaid ? 'bg-green-100' : 'bg-slate-100'
+                              }`}>
+                                <DollarSign className={`w-4 h-4 ${
+                                  isPaid ? 'text-green-600' : 'text-slate-600'
+                                }`} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-slate-900 text-sm">
+                                    {transaction.description || transaction.name || 'Transaction'}
+                                  </p>
+                                  {isCreator && (
+                                    <Badge variant="blue" className="text-xs">You</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">
                                   {new Date(transaction.created_at).toLocaleDateString('en-US', {
                                     month: 'short',
-                                    day: 'numeric',
-                                    hour: 'numeric',
-                                    minute: '2-digit'
-                                  })}
+                                    day: 'numeric'
+                                  })} • {transaction.circle?.name || 'Circle'}
                                 </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-right">
+                                <span className="text-sm font-medium text-slate-900">
+                                  ${(parseFloat(transaction.total_amount || transaction.amount || '0') || 0).toFixed(2)}
+                                </span>
                                 <Badge 
-                                  variant={isPaid ? 'green' : 'red'} 
-                                  className="text-xs"
+                                  variant={isPaid ? 'green' : 'amber'} 
+                                  className="text-xs ml-2"
                                 >
                                   {isPaid ? 'Paid' : 'Pending'}
                                 </Badge>
                               </div>
+                              <button 
+                                className="p-1 hover:bg-slate-100 rounded" 
+                                onClick={() => handleShowTransactionDetails(transaction)}
+                              >
+                                <MoreHorizontal className="w-4 h-4 text-slate-400" />
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              <span className="text-base font-medium text-slate-900">
-                                ${(parseFloat(transaction.total_amount || transaction.amount || '0') || 0).toFixed(2)}
-                              </span>
-                              {transaction.user_amount_owed && !isCreator && (
-                                <p className="text-xs text-slate-500">
-                                  You owe: ${parseFloat(transaction.user_amount_owed).toFixed(2)}
-                                </p>
-                              )}
-                            </div>
-                            <button 
-                              className="p-1 hover:bg-slate-100 rounded" 
-                              aria-label="View transaction details"
-                              onClick={() => handleShowTransactionDetails(transaction)}
-                            >
-                              <MoreHorizontal className="w-4 h-4 text-slate-400" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                      })}
+                        );
+                        })}
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* My Circles */}
-            <div>
-              <div className="mb-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-medium text-slate-900">My Circles</h2>
-                    <p className="text-base text-slate-500">{circles.length} active</p>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
 
-              <Card>
-                <CardContent className="p-0">
-                  {circles.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                        <Users className="w-7 h-7 text-slate-400" />
+              {/* Sidebar: What You're Owed + Quick Actions */}
+              <div className="space-y-6">
+                {/* You're Owed Section */}
+                {balances.owedTo > 0 && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                          <TrendingUp className="w-3 h-3 text-green-600" />
+                        </div>
+                        <h3 className="font-medium text-slate-900">You're Owed</h3>
                       </div>
-                      <p className="text-base text-slate-600 font-medium mb-1">No circles yet</p>
-                      <p className="text-sm text-slate-500 mb-4">Create your first circle to get started</p>
-                      <Link to={createPageUrl("Circles")}>
-                        <Button variant="primary" size="sm">
-                          <Plus className="w-5 h-5 mr-1.5" />
-                          Create Circle
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {circles.slice(0, 5).map((circle) => (
-                        <div key={circle.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-                              <Users className="w-5 h-5 text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-slate-900 text-base">{circle.name}</p>
-                              <p className="text-sm text-slate-500">
-                                {circle.memberCount} members
+                      <p className="text-2xl font-bold text-green-600 mb-3">${balances.owedTo.toFixed(2)}</p>
+                      <div className="space-y-2">
+                        {balances.owedToDetails && balances.owedToDetails.slice(0, 3).map((detail, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 truncate">
+                                {detail.userName}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {detail.transactions.length} transaction{detail.transactions.length !== 1 ? 's' : ''}
                               </p>
                             </div>
-                          </div>
-                          <Link to={createPageUrl(`Circles/${circle.id}`)}>
-                            <Button variant="ghost" size="sm" className="text-white hover:text-slate-900">
-                              View
-                            </Button>
-                          </Link>
-                        </div>
-                      ))}
-                      {circles.length > 5 && (
-                        <div className="p-4">
-                          <Link to={createPageUrl("Circles")}>
-                            <Button variant="outline" size="sm" className="w-full">
-                              View all circles ({circles.length})
-                            </Button>
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Pending Invitations */}
-              {invitations.length > 0 && (
-                <div className="mt-6">
-                  <div className="mb-4">
-                    <h2 className="text-xl font-medium text-slate-900">Pending Invitations</h2>
-                    <p className="text-base text-slate-500">{invitations.length} invitation{invitations.length > 1 ? 's' : ''}</p>
-                  </div>
-
-                  <Card>
-                    <CardContent className="p-0">
-                      <div className="divide-y divide-slate-100">
-                        {invitations.map((invitation) => (
-                          <div key={invitation.id} className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
-                                  <UserPlus className="w-5 h-5" />
-                                </div>
-                                <div>
-                                  <p className="text-base font-medium text-slate-900">{invitation.circle?.name}</p>
-                                  <p className="text-sm text-slate-500">
-                                    Invited by {invitation.inviter?.name || invitation.inviter?.username}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRejectInvitation(invitation.id)}
-                                  disabled={processingInvitation === invitation.id}
-                                  className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-                                >
-                                  {processingInvitation === invitation.id ? '...' : 'Decline'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAcceptInvitation(invitation.id)}
-                                  disabled={processingInvitation === invitation.id}
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  {processingInvitation === invitation.id ? '...' : 'Accept'}
-                                </Button>
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-green-600">
+                                ${parseFloat(detail.totalAmount || 0).toFixed(2)}
+                              </span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-green-600 hover:text-green-700 text-xs p-1 h-auto"
+                                onClick={() => handleSendReminder(detail.userId, detail.userName)}
+                              >
+                                Remind
+                              </Button>
                             </div>
                           </div>
                         ))}
                       </div>
                     </CardContent>
                   </Card>
+                )}
+
+                {/* Quick Actions */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h3 className="font-medium text-slate-900 mb-3">Quick Actions</h3>
+                    <div className="space-y-4">
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start py-4" 
+                        onClick={() => setShowTransactionForm(true)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Transaction
+                      </Button>
+                      <Link to="/circles" className="w-full">
+                        <Button variant="outline" className="w-full justify-start py-4">
+                          <Users className="w-4 h-4 mr-2" />
+                          Manage Circles
+                        </Button>
+                      </Link>
+                      <Link to="/transactions" className="w-full">
+                        <Button variant="outline" className="w-full justify-start py-4">
+                          <Clock3 className="w-4 h-4 mr-2" />
+                          All Transactions
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+        <div className="px-4 sm:px-8 pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Circle Management - Unified Section */}
+            <div className="lg:col-span-3">
+              <div className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-medium text-slate-900">Circle Management</h2>
+                    <p className="text-base text-slate-500">
+                      {circles.length} circles • {invitations.length} pending invitation{invitations.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <Link to="/circles">
+                    <Button variant="outline">
+                      <Users className="w-4 h-4 mr-2" />
+                      Manage All
+                    </Button>
+                  </Link>
                 </div>
-              )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Active Circles */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-medium text-slate-900">My Circles</h3>
+                      <Link to="/circles">
+                        <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800">
+                          View all ({circles.length})
+                        </Button>
+                      </Link>
+                    </div>
+                    
+                    {circles.length === 0 ? (
+                      <div className="text-center py-6">
+                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                          <Users className="w-6 h-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm text-slate-600 mb-3">No circles yet</p>
+                        <Link to="/circles">
+                          <Button variant="primary" size="sm">
+                            <Plus className="w-4 h-4 mr-1" />
+                            Create First Circle
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {circles.slice(0, 3).map((circle) => (
+                          <div key={circle.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                                <Users className="w-4 h-4 text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-slate-900 text-sm">{circle.name}</p>
+                                <p className="text-xs text-slate-500">{circle.memberCount} members</p>
+                              </div>
+                            </div>
+                            <Link to={createPageUrl(`circles/${circle.id}`)}>
+                              <Button variant="ghost" size="sm" className="text-xs">
+                                View
+                              </Button>
+                            </Link>
+                          </div>
+                        ))}
+                        {circles.length > 3 && (
+                          <div className="text-center pt-2">
+                            <Link to="/circles">
+                              <Button variant="outline" size="sm" className="text-xs">
+                                +{circles.length - 3} more circles
+                              </Button>
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Pending Invitations */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-medium text-slate-900">Pending Invitations</h3>
+                      {invitations.length > 0 && (
+                        <Badge variant="amber" className="text-xs">
+                          {invitations.length} pending
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {invitations.length === 0 ? (
+                      <div className="text-center py-6">
+                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                          <Mail className="w-6 h-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm text-slate-600">No pending invitations</p>
+                        <p className="text-xs text-slate-500 mt-1">All caught up!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {invitations.slice(0, 3).map((invitation) => (
+                          <div key={invitation.id} className="border border-amber-200 rounded-lg p-3 bg-amber-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
+                                  <UserPlus className="w-3 h-3" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">{invitation.circle?.name}</p>
+                                  <p className="text-xs text-slate-500">
+                                    From {invitation.inviter?.name || invitation.inviter?.username}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRejectInvitation(invitation.id)}
+                                disabled={processingInvitation === invitation.id}
+                                className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 text-xs flex-1"
+                              >
+                                {processingInvitation === invitation.id ? '...' : 'Decline'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAcceptInvitation(invitation.id)}
+                                disabled={processingInvitation === invitation.id}
+                                className="text-xs flex-1"
+                              >
+                                {processingInvitation === invitation.id ? '...' : 'Accept'}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {invitations.length > 3 && (
+                          <p className="text-xs text-slate-500 text-center">
+                            +{invitations.length - 3} more invitations
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Owed To Modal */}
       {showOwedToModal && (
@@ -2522,6 +2509,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      </div>
+    </div>
+    </div>
     </div>
   );
 }

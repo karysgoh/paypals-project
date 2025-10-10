@@ -725,16 +725,14 @@ module.exports = {
                     throw new Error('Invalid payment status. Must be "pending" or "paid"');
                 }
 
-                // Update payment status
+                // Update payment status using the participant ID
                 await tx.transactionMember.update({
                     where: {
-                        transaction_id_user_id: {
-                            transaction_id: transactionId,
-                            user_id: userId
-                        }
+                        id: participant.id
                     },
                     data: {
-                        payment_status: paymentStatus
+                        payment_status: paymentStatus,
+                        paid_at: paymentStatus === 'paid' ? new Date() : null
                     }
                 });
 

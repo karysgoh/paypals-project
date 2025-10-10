@@ -45,49 +45,79 @@ module.exports = {
     }
 
     const data = { username, password, email };
-    const results = await userModel.createNewUser(data);
-    if (!results) {
-      logger.warn(`User registration failed for username ${data.username}`);
-      return next(new AppError("User registration failed", 500));
-    }
-
-    // Generate email verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
-
-    // Save verification token
-    await userModel.createEmailVerificationToken({
-      email: email,
-      token: verificationToken,
-      expires_at: tokenExpiry,
-      user_id: results.id
-    });
-
-    // Send verification email
+    
     try {
-      await sendVerificationEmail(email, verificationToken, username);
-      logger.info(`Verification email sent to ${email}`);
-    } catch (emailError) {
-      logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
-    }
+      const results = await userModel.createNewUser(data);
+      if (!results) {
+        logger.warn(`User registration failed for username ${data.username}`);
+        return next(new AppError("User registration failed", 500));
+      }
 
-    // Send welcome notification
-    try {
-      await NotificationService.sendWelcomeNotification(results.id, username);
-    } catch (notificationError) {
-      logger.error(`Failed to send welcome notification to user ${results.id}: ${notificationError.message}`);
-      // Don't fail registration if notification fails
-    }
+      // Generate email verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-    logger.info(`User ${data.username} successfully created`);
-    res.locals.message = `User ${data.username} successfully created. Please check your email to verify your account.`;
-    res.locals.user_id = results.id;           
-    res.locals.username = results.username;
-    res.locals.email = results.email;
-    res.locals.role_id = results.role?.id || null;      
-    res.locals.role_name = results.role?.role_name || null; 
-    res.locals.email_verified = results.email_verified || false;
-    next();
+      // Save verification token
+      await userModel.createEmailVerificationToken({
+        email: email,
+        token: verificationToken,
+        expires_at: tokenExpiry,
+        user_id: results.id
+      });
+
+      // Send verification email
+      try {
+        await sendVerificationEmail(email, verificationToken, username);
+        logger.info(`Verification email sent to ${email}`);
+      } catch (emailError) {
+        logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
+      }
+
+      // Send welcome notification
+      try {
+        await NotificationService.sendWelcomeNotification(results.id, username);
+      } catch (notificationError) {
+        logger.error(`Failed to send welcome notification to user ${results.id}: ${notificationError.message}`);
+        // Don't fail registration if notification fails
+      }
+
+      logger.info(`User ${data.username} successfully created`);
+      res.locals.message = `User ${data.username} successfully created. Please check your email to verify your account.`;
+      res.locals.user_id = results.id;           
+      res.locals.username = results.username;
+      res.locals.email = results.email;
+      res.locals.role_id = results.role?.id || null;      
+      res.locals.role_name = results.role?.role_name || null; 
+      res.locals.email_verified = results.email_verified || false;
+      next();
+    } catch (error) {
+      // Handle unique constraint violations
+      if (error.code === 'P2002') {
+        const target = error.meta?.target;
+        if (target?.includes('username')) {
+          logger.warn(`Registration failed: Username already exists - ${data.username}`);
+          return next(new AppError("Username already exists", 409));
+        }
+        if (target?.includes('email')) {
+          logger.warn(`Registration failed: Email already exists - ${data.email}`);
+          return next(new AppError("Email already exists", 409));
+        }
+        if (target?.includes('paynow_phone')) {
+          logger.warn(`Registration failed: PayNow phone number already exists - ${data.username}`);
+          return next(new AppError("This PayNow phone number is already registered", 409));
+        }
+        if (target?.includes('paynow_nric')) {
+          logger.warn(`Registration failed: PayNow NRIC already exists - ${data.username}`);
+          return next(new AppError("This PayNow NRIC is already registered", 409));
+        }
+        // Generic unique constraint error
+        logger.warn(`Registration failed: Duplicate data - ${data.username}`);
+        return next(new AppError("This information is already registered", 409));
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }),
 
   verifyEmail: catchAsync(async (req, res, next) => {
@@ -389,13 +419,34 @@ module.exports = {
       paynow_enabled: Boolean(paynow_enabled)
     };
 
-    const updatedPaymentMethods = await userModel.updatePaymentMethods(user_id, paymentData);
-    
-    logger.info(`Payment methods updated for user: ${user_id}`);
-    res.status(200).json({
-      status: "success",
-      message: "Payment methods updated successfully",
-      data: updatedPaymentMethods
-    });
+    try {
+      const updatedPaymentMethods = await userModel.updatePaymentMethods(user_id, paymentData);
+      
+      logger.info(`Payment methods updated for user: ${user_id}`);
+      res.status(200).json({
+        status: "success",
+        message: "Payment methods updated successfully",
+        data: updatedPaymentMethods
+      });
+    } catch (error) {
+      // Handle unique constraint violations
+      if (error.code === 'P2002') {
+        const target = error.meta?.target;
+        if (target?.includes('paynow_phone')) {
+          logger.warn(`Update payment methods failed: PayNow phone number already exists for user ${user_id}`);
+          return next(new AppError("This PayNow phone number is already registered by another user", 409));
+        }
+        if (target?.includes('paynow_nric')) {
+          logger.warn(`Update payment methods failed: PayNow NRIC already exists for user ${user_id}`);
+          return next(new AppError("This PayNow NRIC is already registered by another user", 409));
+        }
+        // Generic unique constraint error
+        logger.warn(`Update payment methods failed: Duplicate data for user ${user_id}`);
+        return next(new AppError("This PayNow information is already registered by another user", 409));
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   })
 };

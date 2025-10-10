@@ -57,6 +57,7 @@ enum PaymentMethod {
   cash
   bank_transfer
   zelle
+  paynow
   other
 }
 
@@ -154,8 +155,8 @@ model User {
   role_id        Int?
   status         UserStatus @default(active)
   
-  paynow_phone   String?    @db.VarChar(20)  
-  paynow_nric    String?    @db.VarChar(20) 
+  paynow_phone   String?    @unique @db.VarChar(20)  
+  paynow_nric    String?    @unique @db.VarChar(20) 
   paynow_enabled Boolean    @default(false) 
 
   created_at   DateTime   @default(now())
@@ -175,6 +176,8 @@ model User {
   @@map("users")
   @@index([username])
   @@index([email])
+  @@index([paynow_phone])
+  @@index([paynow_nric])
 }
 
 // ======================================

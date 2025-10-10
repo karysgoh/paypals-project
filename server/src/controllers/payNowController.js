@@ -48,7 +48,7 @@ const payNowController = {
       }
 
       // Check if already paid
-      if (userMember.payment_status === 'PAID') {
+      if (userMember.payment_status === 'paid') {
         return next(new AppError('This transaction has already been paid', 400));
       }
 
@@ -141,20 +141,17 @@ const payNowController = {
         return next(new AppError('You are not part of this transaction', 403));
       }
 
-      if (userMember.payment_status === 'PAID') {
+      if (userMember.payment_status === 'paid') {
         return next(new AppError('Payment already confirmed', 400));
       }
 
       // Update transaction member status
       await prisma.transactionMember.update({
         where: {
-          transaction_id_user_id: {
-            transaction_id: parseInt(transactionId),
-            user_id: userId
-          }
+          id: userMember.id
         },
         data: {
-          payment_status: 'PAID',
+          payment_status: 'paid',
           payment_method: 'paynow',
           paid_at: new Date()
         }
@@ -165,7 +162,7 @@ const payNowController = {
         where: { transaction_id: parseInt(transactionId) }
       });
 
-      const allPaid = allMembers.every(member => member.payment_status === 'PAID');
+      const allPaid = allMembers.every(member => member.payment_status === 'paid');
 
       // Update main transaction status if all paid
       if (allPaid) {

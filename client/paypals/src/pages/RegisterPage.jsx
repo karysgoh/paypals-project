@@ -126,14 +126,16 @@ const RegisterPage = () => {
       sessionStorage.setItem("registrationEmail", formData.email); 
     } catch (error) {
       console.error("Register failed:", error);
-      showNotification(
-        error.status === 400
-          ? "Invalid input. Please check your username or email."
-          : error.status === 409
-          ? "Username or email already exists."
-          : "Registration failed. Please try again.",
-        'error'
-      );
+      
+      // Enhanced error handling for different conflict types
+      if (error.status === 400) {
+        showNotification("Invalid input. Please check your username or email.", 'error');
+      } else if (error.status === 409) {
+        // For registration, conflicts are usually username or email
+        showNotification("Username or email already exists. Please choose different credentials.", 'error');
+      } else {
+        showNotification("Registration failed. Please try again.", 'error');
+      }
     } finally {
       setIsRegistering(false);
     }

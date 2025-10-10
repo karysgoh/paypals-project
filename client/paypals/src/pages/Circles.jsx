@@ -302,7 +302,7 @@ export default function Circles() {
                     placeholder="Enter circle name"
                     value={newCircleName}
                     onChange={(e) => setNewCircleName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-white"
                     required
                   />
                 </div>

@@ -109,13 +109,33 @@ const PaymentSettings = () => {
       } else if (response.status === 401) {
         navigate('/login');
         return;
+      } else if (response.status === 409) {
+        // Handle unique constraint violations (duplicate PayNow details)
+        const errorData = await response.json();
+        const errorMessage = errorData.message || 'This PayNow information is already in use';
+        
+        // Show specific error message for duplicate PayNow details
+        if (errorMessage.includes('phone number')) {
+          showNotification('❌ This PayNow phone number is already registered by another user. Please use a different phone number.', 'error');
+        } else if (errorMessage.includes('NRIC')) {
+          showNotification('❌ This PayNow NRIC is already registered by another user. Please use a different NRIC.', 'error');
+        } else {
+          showNotification(`❌ ${errorMessage}`, 'error');
+        }
+        return;
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to update payment methods');
       }
     } catch (error) {
       console.error('Error updating payment methods:', error);
-      showNotification(error.message || 'Failed to update payment methods. Please try again.', 'error');
+      
+      // Don't show generic error if we already handled a 409 conflict
+      if (error.message && !error.message.includes('Failed to fetch')) {
+        showNotification(error.message || 'Failed to update payment methods. Please try again.', 'error');
+      } else {
+        showNotification('Failed to update payment methods. Please check your connection and try again.', 'error');
+      }
     } finally {
       setSaving(false);
     }
