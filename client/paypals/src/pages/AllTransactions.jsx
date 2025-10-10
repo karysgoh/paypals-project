@@ -113,6 +113,14 @@ const AllTransactions = () => {
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
   
+  // Date filtering states
+  const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month, year, custom
+  const [customDateStart, setCustomDateStart] = useState("");
+  const [customDateEnd, setCustomDateEnd] = useState("");
+  const [monthFilter, setMonthFilter] = useState(""); // YYYY-MM format
+  const [yearFilter, setYearFilter] = useState(""); // YYYY format
+  const [dateValidationError, setDateValidationError] = useState(""); // For date validation errors
+  
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTransactions, setTotalTransactions] = useState(0);
@@ -129,6 +137,68 @@ const AllTransactions = () => {
     { value: "shopping", label: "Shopping" },
     { value: "other", label: "Other" }
   ];
+
+  // Helper function to check if a date is in range
+  const isDateInRange = (dateString, filter, customStart, customEnd, specificMonth, specificYear) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    
+    // Check specific year filter first
+    if (specificYear && date.getFullYear() !== parseInt(specificYear)) {
+      return false;
+    }
+    
+    // Check specific month filter (format: YYYY-MM)
+    if (specificMonth) {
+      const [year, month] = specificMonth.split('-');
+      if (date.getFullYear() !== parseInt(year) || date.getMonth() !== parseInt(month) - 1) {
+        return false;
+      }
+    }
+    
+    // Check date range filter
+    switch (filter) {
+      case 'today':
+        return date.toDateString() === now.toDateString();
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return date >= weekAgo;
+      case 'month':
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        return date >= monthAgo;
+      case 'year':
+        const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        return date >= yearAgo;
+      case 'custom':
+        if (customStart && customEnd) {
+          const startDate = new Date(customStart);
+          const endDate = new Date(customEnd);
+          return date >= startDate && date <= endDate;
+        }
+        return true;
+      default:
+        return true;
+    }
+  };
+
+  // Helper function to validate date range
+  const validateDateRange = (startDate, endDate) => {
+    if (!startDate || !endDate) {
+      setDateValidationError("");
+      return true;
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (end < start) {
+      setDateValidationError("End date cannot be earlier than start date");
+      return false;
+    }
+    
+    setDateValidationError("");
+    return true;
+  };
 
   // Memoized filtered and sorted transactions for better performance
   const filteredTransactions = useMemo(() => {
@@ -156,6 +226,14 @@ const AllTransactions = () => {
     if (categoryFilter !== "all") {
       filtered = filtered.filter(transaction =>
         transaction.category === categoryFilter
+      );
+    }
+    
+    // Date filtering (comprehensive filter that handles all date types)
+    // Only apply date filtering if there's no validation error
+    if (!dateValidationError) {
+      filtered = filtered.filter(transaction =>
+        isDateInRange(transaction.created_at, dateFilter, customDateStart, customDateEnd, monthFilter, yearFilter)
       );
     }
     
@@ -191,7 +269,7 @@ const AllTransactions = () => {
     });
     
     return filtered;
-  }, [allTransactions, searchTerm, statusFilter, categoryFilter, sortBy, sortOrder]);
+  }, [allTransactions, searchTerm, statusFilter, categoryFilter, sortBy, sortOrder, dateFilter, customDateStart, customDateEnd, monthFilter, yearFilter, dateValidationError]);
 
   // Memoized pagination
   const paginatedTransactions = useMemo(() => {
@@ -256,6 +334,38 @@ const AllTransactions = () => {
     }
   };
 
+  // Get available months from transactions
+  const getAvailableMonths = () => {
+    const months = new Set();
+    allTransactions.forEach(transaction => {
+      if (transaction.created_at) {
+        const date = new Date(transaction.created_at);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        months.add(monthKey);
+      }
+    });
+    return Array.from(months).sort().reverse(); // Most recent first
+  };
+
+  // Get available years from transactions
+  const getAvailableYears = () => {
+    const years = new Set();
+    allTransactions.forEach(transaction => {
+      if (transaction.created_at) {
+        const date = new Date(transaction.created_at);
+        years.add(date.getFullYear());
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a); // Most recent first
+  };
+
+  // Format month for display
+  const formatMonthDisplay = (monthKey) => {
+    const [year, month] = monthKey.split('-');
+    const date = new Date(year, month - 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
   // Debounced search effect - optimized delay
   useEffect(() => {
     if (searchInput !== searchTerm) {
@@ -306,6 +416,55 @@ const AllTransactions = () => {
       setStatusFilter(value);
     } else if (filterType === 'category') {
       setCategoryFilter(value);
+    } else if (filterType === 'date') {
+      setDateFilter(value);
+      // Reset custom dates when changing to preset filters
+      if (value !== 'custom' && value !== 'all') {
+        setCustomDateStart("");
+        setCustomDateEnd("");
+        setDateValidationError("");
+      }
+      // Reset month/year filters when using date range filters
+      if (value !== 'all') {
+        setMonthFilter("");
+        setYearFilter("");
+      }
+    } else if (filterType === 'month') {
+      setMonthFilter(value);
+      // Clear year filter and date range when selecting specific month
+      setYearFilter("");
+      setDateFilter('all');
+      setCustomDateStart("");
+      setCustomDateEnd("");
+      setDateValidationError("");
+    } else if (filterType === 'year') {
+      setYearFilter(value);
+      // Clear month filter and date range when selecting specific year
+      setMonthFilter("");
+      setDateFilter('all');
+      setCustomDateStart("");
+      setCustomDateEnd("");
+      setDateValidationError("");
+    } else if (filterType === 'customStart') {
+      setCustomDateStart(value);
+      // When user starts typing a date, switch to custom mode and clear month/year
+      if (value) {
+        setDateFilter('custom');
+        setMonthFilter("");
+        setYearFilter("");
+      }
+      // Validate against end date
+      validateDateRange(value, customDateEnd);
+    } else if (filterType === 'customEnd') {
+      setCustomDateEnd(value);
+      // When user starts typing a date, switch to custom mode and clear month/year
+      if (value) {
+        setDateFilter('custom');
+        setMonthFilter("");
+        setYearFilter("");
+      }
+      // Validate against start date
+      validateDateRange(customDateStart, value);
     }
     setCurrentPage(1); // Reset to first page when filtering
   };
@@ -392,63 +551,163 @@ const AllTransactions = () => {
         {/* Filters and Search */}
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isSearching ? 'text-blue-500 animate-pulse' : 'text-slate-400'}`} />
-                <Input
-                  type="text"
-                  placeholder="Search transactions..."
-                  value={searchInput}
-                  onChange={handleSearch}
-                  className="pl-10"
-                />
-                {isSearching && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                )}
+            <div className="space-y-4">
+              {/* First row - Search and basic filters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Search */}
+                <div className="relative">
+                  <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isSearching ? 'text-blue-500 animate-pulse' : 'text-slate-400'}`} />
+                  <Input
+                    type="text"
+                    placeholder="Search transactions..."
+                    value={searchInput}
+                    onChange={handleSearch}
+                    className="pl-10"
+                  />
+                  {isSearching && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Status Filter */}
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                </Select>
+
+                {/* Category Filter */}
+                <Select
+                  value={categoryFilter}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                >
+                  {categories.map(category => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </Select>
+
+                {/* Sort Options */}
+                <Select
+                  value={`${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [field, order] = e.target.value.split('-');
+                    setSortBy(field);
+                    setSortOrder(order);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="created_at-desc">Newest First</option>
+                  <option value="created_at-asc">Oldest First</option>
+                  <option value="amount-desc">Highest Amount</option>
+                  <option value="amount-asc">Lowest Amount</option>
+                  <option value="name-asc">Name A-Z</option>
+                  <option value="name-desc">Name Z-A</option>
+                </Select>
               </div>
 
-              {/* Status Filter */}
-              <Select
-                value={statusFilter}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-              </Select>
+              {/* Second row - Date filters */}
+              <div className="border-t pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                  {/* Date Range Filter */}
+                  <Select
+                    value={dateFilter}
+                    onChange={(e) => handleFilterChange('date', e.target.value)}
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">Past Week</option>
+                    <option value="month">Past Month</option>
+                    <option value="year">Past Year</option>
+                    <option value="custom">Custom Range</option>
+                  </Select>
 
-              {/* Category Filter */}
-              <Select
-                value={categoryFilter}
-                onChange={(e) => handleFilterChange('category', e.target.value)}
-              >
-                {categories.map(category => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </Select>
+                  {/* From Date - Always visible */}
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">From Date</label>
+                    <Input
+                      type="date"
+                      placeholder="From date"
+                      value={customDateStart}
+                      max={customDateEnd || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => handleFilterChange('customStart', e.target.value)}
+                      className={`text-sm ${dateValidationError ? 'border-red-500 focus:border-red-500' : ''}`}
+                    />
+                  </div>
+                  
+                  {/* To Date - Always visible */}
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">To Date</label>
+                    <Input
+                      type="date"
+                      placeholder="To date"
+                      value={customDateEnd}
+                      min={customDateStart}
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => handleFilterChange('customEnd', e.target.value)}
+                      className={`text-sm ${dateValidationError ? 'border-red-500 focus:border-red-500' : ''}`}
+                    />
+                    {dateValidationError && (
+                      <p className="text-xs text-red-500 mt-1">{dateValidationError}</p>
+                    )}
+                  </div>
 
-              {/* Sort Options */}
-              <Select
-                value={`${sortBy}-${sortOrder}`}
-                onChange={(e) => {
-                  const [field, order] = e.target.value.split('-');
-                  setSortBy(field);
-                  setSortOrder(order);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="created_at-desc">Newest First</option>
-                <option value="created_at-asc">Oldest First</option>
-                <option value="amount-desc">Highest Amount</option>
-                <option value="amount-asc">Lowest Amount</option>
-                <option value="name-asc">Name A-Z</option>
-                <option value="name-desc">Name Z-A</option>
-              </Select>
+                  {/* Specific Month Filter */}
+                  <Select
+                    value={monthFilter}
+                    onChange={(e) => handleFilterChange('month', e.target.value)}
+                  >
+                    <option value="">Select Month</option>
+                    {getAvailableMonths().map(month => (
+                      <option key={month} value={month}>
+                        {formatMonthDisplay(month)}
+                      </option>
+                    ))}
+                  </Select>
+
+                  {/* Specific Year Filter */}
+                  <Select
+                    value={yearFilter}
+                    onChange={(e) => handleFilterChange('year', e.target.value)}
+                  >
+                    <option value="">Select Year</option>
+                    {getAvailableYears().map(year => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </Select>
+
+                  {/* Clear Filters Button */}
+                  {(dateFilter !== 'all' || monthFilter || yearFilter || statusFilter !== 'all' || categoryFilter !== 'all' || searchTerm || customDateStart || customDateEnd) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setDateFilter('all');
+                        setMonthFilter('');
+                        setYearFilter('');
+                        setCustomDateStart('');
+                        setCustomDateEnd('');
+                        setStatusFilter('all');
+                        setCategoryFilter('all');
+                        setSearchInput('');
+                        setSearchTerm('');
+                        setDateValidationError('');
+                        setCurrentPage(1);
+                      }}
+                      className="whitespace-nowrap"
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
