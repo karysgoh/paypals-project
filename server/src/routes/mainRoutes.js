@@ -10,6 +10,7 @@ const bcryptMiddleware = require('../middlewares/bcryptMiddleware.js');
 const jwtMiddleware = require('../middlewares/jwtMiddleware.js');
 const userController = require('../controllers/userController.js');
 const roleMiddleware = require('../middlewares/roleMiddleware.js');
+const payNowController = require('../controllers/payNowController.js');
 
 //////////////////////////////////////////////////////
 // IMPORT MIDDLEWARES FOR INPUT VALIDATION
@@ -136,6 +137,10 @@ router.patch('/transactions/external/:token/payment', transactionController.upda
 
 // Regular transaction routes (AUTH REQUIRED)
 router.use('/transactions', jwtMiddleware.verifyAccessToken, transactionRoutes);
+
+// External PayNow routes (NO AUTH REQUIRED - uses token authentication)
+router.get('/paynow/external/:token/qr', payNowController.generateExternalQR);
+router.post('/paynow/external/:token/confirm', payNowController.confirmExternalPayment);
 
 // PayNow routes (AUTH REQUIRED)
 const payNowRoutes = require('../routes/payNowRoutes.js');

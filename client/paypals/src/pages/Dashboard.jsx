@@ -368,7 +368,7 @@ export default function Dashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, calculateBalancesFromTransactions]);
+  }, [currentUser]); // Removed calculateBalancesFromTransactions dependency since it's stable with empty deps
 
   useEffect(() => {
     if (!authLoading && currentUser) {
@@ -496,7 +496,7 @@ export default function Dashboard() {
     if (!authLoading && currentUser) {
       loadInvitations();
     }
-  }, [currentUser, authLoading, loadInvitations]);
+  }, [currentUser, authLoading]); // Removed loadInvitations to prevent infinite loop
 
   const handleRetry = () => {
     loadDashboardData();
@@ -542,10 +542,35 @@ export default function Dashboard() {
   };
 
   const updateParticipantAmount = (user_id, amount) => {
-    setTxForm(f => ({
-      ...f,
-      participants: f.participants.map(p => p.user_id === user_id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p),
-    }));
+    const newAmount = parseFloat(amount) || 0;
+    const totalAmount = parseFloat(txForm.total_amount) || 0;
+    
+    setTxForm(f => {
+      const updatedParticipants = f.participants.map(p => 
+        p.user_id === user_id ? { ...p, amount_owed: newAmount } : p
+      );
+      
+      // Auto-calculate remaining amount for the second participant if there are exactly 2 participants
+      const includedParticipants = updatedParticipants.filter(p => p.include);
+      
+      if (includedParticipants.length === 2 && totalAmount > 0) {
+        const updatedParticipant = includedParticipants.find(p => p.user_id === user_id);
+        const otherParticipant = includedParticipants.find(p => p.user_id !== user_id);
+        
+        if (updatedParticipant && otherParticipant) {
+          const remainingAmount = totalAmount - newAmount;
+          if (remainingAmount >= 0) {
+            // Update the other participant's amount
+            const finalParticipants = updatedParticipants.map(p => 
+              p.user_id === otherParticipant.user_id ? { ...p, amount_owed: remainingAmount } : p
+            );
+            return { ...f, participants: finalParticipants };
+          }
+        }
+      }
+      
+      return { ...f, participants: updatedParticipants };
+    });
   };
 
   const addExternalParticipant = () => {
@@ -587,12 +612,50 @@ export default function Dashboard() {
   };
 
   const updateExternalParticipantAmount = (id, amount) => {
-    setTxForm(f => ({
-      ...f,
-      external_participants: f.external_participants.map(p => 
-        p.id === id ? { ...p, amount_owed: parseFloat(amount) || 0 } : p
-      )
-    }));
+    const newAmount = parseFloat(amount) || 0;
+    const totalAmount = parseFloat(txForm.total_amount) || 0;
+    
+    setTxForm(f => {
+      const updatedExternalParticipants = f.external_participants.map(p => 
+        p.id === id ? { ...p, amount_owed: newAmount } : p
+      );
+      
+      // Auto-calculate for 2 participants (considering both internal and external)
+      const includedInternal = f.participants.filter(p => p.include);
+      const includedExternal = updatedExternalParticipants.filter(p => p.include);
+      const totalIncluded = includedInternal.length + includedExternal.length;
+      
+      if (totalIncluded === 2 && totalAmount > 0) {
+        const updatedExternal = includedExternal.find(p => p.id === id);
+        
+        if (updatedExternal) {
+          const remainingAmount = totalAmount - newAmount;
+          
+          if (remainingAmount >= 0) {
+            // Find the other participant (could be internal or external)
+            if (includedInternal.length === 1) {
+              // Other participant is internal
+              const otherInternal = includedInternal[0];
+              const updatedInternalParticipants = f.participants.map(p => 
+                p.user_id === otherInternal.user_id ? { ...p, amount_owed: remainingAmount } : p
+              );
+              return { ...f, participants: updatedInternalParticipants, external_participants: updatedExternalParticipants };
+            } else if (includedExternal.length === 2) {
+              // Other participant is external
+              const otherExternal = includedExternal.find(p => p.id !== id);
+              if (otherExternal) {
+                const finalExternalParticipants = updatedExternalParticipants.map(p => 
+                  p.id === otherExternal.id ? { ...p, amount_owed: remainingAmount } : p
+                );
+                return { ...f, external_participants: finalExternalParticipants };
+              }
+            }
+          }
+        }
+      }
+      
+      return { ...f, external_participants: updatedExternalParticipants };
+    });
   };
 
   const handleCreateTransaction = async (e) => {
@@ -1368,6 +1431,13 @@ export default function Dashboard() {
                           Split amount evenly among participants
                         </label>
                       </div>
+                      
+                      {!txForm.splitEven && (
+                        <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
+                          💡 <strong>Smart Calculation:</strong> When entering amounts manually for 2 participants, 
+                          the second participant's amount will be automatically calculated as the remaining balance.
+                        </div>
+                      )}
                     </div>
                     
                     {/* Participants Section */}
@@ -1724,24 +1794,24 @@ export default function Dashboard() {
                           
                           return (
                           <div key={transaction.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                                 isPaid ? 'bg-green-100' : 'bg-slate-100'
                               }`}>
                                 <DollarSign className={`w-4 h-4 ${
                                   isPaid ? 'text-green-600' : 'text-slate-600'
                                 }`} />
                               </div>
-                              <div>
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="font-medium text-slate-900 text-sm">
+                                  <p className="font-medium text-slate-900 text-sm truncate">
                                     {transaction.description || transaction.name || 'Transaction'}
                                   </p>
                                   {isCreator && (
-                                    <Badge variant="blue" className="text-xs">You</Badge>
+                                    <Badge variant="blue" className="text-xs flex-shrink-0">You</Badge>
                                   )}
                                 </div>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-xs text-slate-500 truncate">
                                   {new Date(transaction.created_at).toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric'
@@ -1749,20 +1819,20 @@ export default function Dashboard() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               <div className="text-right">
-                                <span className="text-sm font-medium text-slate-900">
+                                <div className="text-sm font-medium text-slate-900">
                                   ${(parseFloat(transaction.total_amount || transaction.amount || '0') || 0).toFixed(2)}
-                                </span>
+                                </div>
                                 <Badge 
                                   variant={isPaid ? 'green' : 'amber'} 
-                                  className="text-xs ml-2"
+                                  className="text-xs"
                                 >
                                   {isPaid ? 'Paid' : 'Pending'}
                                 </Badge>
                               </div>
                               <button 
-                                className="p-1 hover:bg-slate-100 rounded" 
+                                className="p-1 hover:bg-slate-100 rounded flex-shrink-0" 
                                 onClick={() => handleShowTransactionDetails(transaction)}
                               >
                                 <MoreHorizontal className="w-4 h-4 text-slate-400" />

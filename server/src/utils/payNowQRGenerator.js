@@ -43,7 +43,7 @@ class PayNowQRGenerator {
   /**
    * Generate PayNow QR code data string
    * @param {Object} params - Payment parameters
-   * @param {string} params.recipient - Phone number or NRIC
+   * @param {string} params.recipient - Singapore phone number (+6591234567 or 91234567)
    * @param {number} params.amount - Amount in SGD
    * @param {string} params.merchantName - Recipient's name
    * @param {string} params.reference - Payment reference
@@ -142,7 +142,7 @@ class PayNowQRGenerator {
 
   /**
    * Determine proxy type based on recipient format
-   * @param {string} recipient - Phone number, NRIC, or UEN
+   * @param {string} recipient - Phone number only (NRIC support removed)
    * @returns {string} Proxy type code
    */
   getProxyType(recipient) {
@@ -153,17 +153,7 @@ class PayNowQRGenerator {
       return '0'; // Mobile
     }
     
-    // Singapore NRIC/FIN (starts with S, T, F, G followed by 7 digits and letter)
-    if (/^[STFG]\d{7}[A-Z]$/i.test(cleaned)) {
-      return '3'; // VPA (Virtual Payment Address)
-    }
-    
-    // UEN (Unique Entity Number for companies)
-    if (/^\d{8,10}[A-Z]$/i.test(cleaned)) {
-      return '2'; // UEN
-    }
-    
-    // Default to mobile if unclear
+    // Default to mobile for any other format
     return '0';
   }
 
@@ -221,18 +211,15 @@ class PayNowQRGenerator {
   }
 
   /**
-   * Validate recipient ID format
+   * Validate recipient ID format (phone number only)
    */
   validateRecipient(recipient) {
     const cleaned = recipient.replace(/\s+/g, '');
     
-    const patterns = {
-      mobile: /^(\+65)?[89]\d{7}$/,
-      nric: /^[STFG]\d{7}[A-Z]$/i,
-      uen: /^\d{8,10}[A-Z]$/i
-    };
+    // Only validate Singapore mobile numbers
+    const phonePattern = /^(\+65)?[89]\d{7}$/;
     
-    return Object.values(patterns).some(pattern => pattern.test(cleaned));
+    return phonePattern.test(cleaned);
   }
 }
 

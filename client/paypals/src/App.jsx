@@ -32,7 +32,7 @@ const ProtectedRoute = () => {
 
 // Layout component to include NavBar on all pages
 const MainLayout = () => (
-  <div>
+  <div className="min-h-screen w-full">
     <NavBar />
     <Outlet />
   <Tutorial />
@@ -51,6 +51,7 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/external/transaction/:token" element={<ExternalTransaction />} />
+            <Route path="/external/pay/:token" element={<ExternalTransaction />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/transaction/:transactionId/pay" element={<TransactionPayment />} />
               <Route path="/dashboard" element={<Dashboard />} />

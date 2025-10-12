@@ -18,7 +18,9 @@ import {
   TrendingUp,
   TrendingDown,
   CreditCard,
-  ArrowLeft
+  ArrowLeft,
+  Download,
+  QrCode
 } from "lucide-react";
 
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, ...props }) => {
@@ -308,7 +310,7 @@ const AllTransactions = () => {
     }
   };
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -332,7 +334,7 @@ const AllTransactions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showNotification, navigate]); // Add dependencies
 
   // Get available months from transactions
   const getAvailableMonths = () => {
@@ -390,7 +392,7 @@ const AllTransactions = () => {
       showNotification('Please log in to view your transactions', 'error');
       setTimeout(() => navigate('/login'), 2000);
     }
-  }, [currentUser]);
+  }, [currentUser, fetchTransactions]); // Add fetchTransactions dependency
 
   // Update displayed transactions and counts when filtering changes
   useEffect(() => {
@@ -477,6 +479,35 @@ const AllTransactions = () => {
       setSortOrder('desc');
     }
     setCurrentPage(1);
+  };
+
+  // Download QR code for payment
+  const downloadPaymentQR = async (transactionId, transactionName) => {
+    try {
+      setLoading(true);
+      const response = await api.request(`/paynow/${transactionId}/qr`);
+      
+      if (response.success && response.data?.qrCodeDataURL) {
+        // Create download link
+        const link = document.createElement('a');
+        link.href = response.data.qrCodeDataURL;
+        link.download = `PayNow-QR-${transactionName || transactionId}-${response.data.paymentInfo.amount}SGD.png`;
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showNotification('QR code downloaded successfully!', 'success');
+      } else {
+        throw new Error('Failed to generate QR code');
+      }
+    } catch (error) {
+      console.error('Error downloading QR code:', error);
+      showNotification(error.message || 'Failed to download QR code', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -879,8 +910,22 @@ const AllTransactions = () => {
                         </div>
                         
                         <div className="text-right">
-                          <div className="text-lg font-semibold text-slate-900 mb-1">
-                            {formatCurrency(totalAmount)}
+                          <div className="flex items-center gap-2 justify-end mb-1">
+                            <div className="text-lg font-semibold text-slate-900">
+                              {formatCurrency(totalAmount)}
+                            </div>
+                            {/* Download QR Button - only show for unpaid transactions where user owes money */}
+                            {!isPaid && !isCreator && userAmountOwed > 0 && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => downloadPaymentQR(transaction.id, transaction.name)}
+                                className="ml-2 p-2 h-8 w-8"
+                                title="Download PayNow QR Code"
+                              >
+                                <QrCode className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                           {!isCreator && userAmountOwed > 0 && (
                             <div className="text-sm text-slate-600">

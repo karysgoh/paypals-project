@@ -10,7 +10,6 @@ const PaymentSettings = () => {
   const [saving, setSaving] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState({
     paynow_phone: '',
-    paynow_nric: '',
     paynow_enabled: false
   });
 
@@ -32,7 +31,6 @@ const PaymentSettings = () => {
         const data = await response.json();
         setPaymentMethods({
           paynow_phone: data.data.paynow_phone || '',
-          paynow_nric: data.data.paynow_nric || '',
           paynow_enabled: data.data.paynow_enabled || false
         });
       } else if (response.status === 401) {
@@ -61,22 +59,15 @@ const PaymentSettings = () => {
     const errors = [];
 
     if (paymentMethods.paynow_enabled) {
-      if (!paymentMethods.paynow_phone && !paymentMethods.paynow_nric) {
-        errors.push('Please provide either a PayNow phone number or NRIC to enable PayNow');
+      if (!paymentMethods.paynow_phone) {
+        errors.push('Please provide a PayNow phone number to enable PayNow');
       }
 
       if (paymentMethods.paynow_phone) {
-        const phoneRegex = /^(\+65)?[689]\d{7}$/;
+        const phoneRegex = /^(\+65)?[89]\d{7}$/;
         const cleanPhone = paymentMethods.paynow_phone.replace(/\s+/g, '');
         if (!phoneRegex.test(cleanPhone)) {
-          errors.push('Invalid Singapore phone number format. Use +65XXXXXXXX or 8XXXXXXX');
-        }
-      }
-
-      if (paymentMethods.paynow_nric) {
-        const nricRegex = /^[STFG]\d{7}[A-Z]$/i;
-        if (!nricRegex.test(paymentMethods.paynow_nric)) {
-          errors.push('Invalid NRIC/FIN format. Use S1234567A format');
+          errors.push('Invalid Singapore phone number format. Use +6591234567 or 91234567');
         }
       }
     }
@@ -117,8 +108,6 @@ const PaymentSettings = () => {
         // Show specific error message for duplicate PayNow details
         if (errorMessage.includes('phone number')) {
           showNotification('❌ This PayNow phone number is already registered by another user. Please use a different phone number.', 'error');
-        } else if (errorMessage.includes('NRIC')) {
-          showNotification('❌ This PayNow NRIC is already registered by another user. Please use a different NRIC.', 'error');
         } else {
           showNotification(`❌ ${errorMessage}`, 'error');
         }
@@ -195,7 +184,7 @@ const PaymentSettings = () => {
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Enable PayNow</h3>
                 <p className="text-sm text-gray-600">
-                  Allow others to pay you using Singapore's PayNow system
+                  Allow others to pay you using Singapore's PayNow system with your phone number
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -230,28 +219,6 @@ const PaymentSettings = () => {
               </p>
             </div>
 
-            {/* PayNow NRIC */}
-            <div>
-              <label htmlFor="paynow_nric" className="block text-sm font-medium text-gray-700 mb-2">
-                PayNow NRIC/FIN
-              </label>
-              <input
-                type="text"
-                id="paynow_nric"
-                name="paynow_nric"
-                value={paymentMethods.paynow_nric}
-                onChange={handleInputChange}
-                placeholder="S1234567A"
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                disabled={!paymentMethods.paynow_enabled}
-                maxLength="9"
-                style={{ textTransform: 'uppercase' }}
-              />
-              <p className="mt-2 text-sm text-gray-500">
-                Singapore NRIC or FIN registered with PayNow
-              </p>
-            </div>
-
             {/* Help Text */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex">
@@ -266,9 +233,9 @@ const PaymentSettings = () => {
                   </h3>
                   <div className="mt-2 text-sm text-yellow-700">
                     <ul className="list-disc list-inside space-y-1">
-                      <li>You need at least one PayNow identifier (phone number or NRIC) to enable PayNow</li>
-                      <li>Make sure your phone number or NRIC is registered with PayNow in your bank app</li>
-                      <li>Others will be able to pay you directly using these PayNow identifiers</li>
+                      <li>You need at least one PayNow identifier (phone number) to enable PayNow</li>
+                      <li>Make sure your phone number is registered with PayNow in your bank app</li>
+                      <li>Others will be able to pay you directly using this PayNow identifier</li>
                       <li>Keep your information up to date for seamless transactions</li>
                     </ul>
                   </div>
@@ -283,9 +250,6 @@ const PaymentSettings = () => {
                 <div className="text-sm text-green-700">
                   {paymentMethods.paynow_phone && (
                     <p>📱 Phone: {formatPhoneNumber(paymentMethods.paynow_phone)}</p>
-                  )}
-                  {paymentMethods.paynow_nric && (
-                    <p>🆔 NRIC/FIN: {paymentMethods.paynow_nric}</p>
                   )}
                 </div>
               </div>

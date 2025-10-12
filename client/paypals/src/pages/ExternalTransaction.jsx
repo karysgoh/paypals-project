@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, Clock, AlertCircle, Users, DollarSign, QrCode, CreditCard } from 'lucide-react';
+import ExternalPayNowButton from '../components/ExternalPayNowButton';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -12,8 +13,7 @@ const Button = ({ children, variant = "default", size = "default", className = "
     primary: "bg-green-600 text-white hover:bg-green-700",
     secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
     outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-    success: "bg-green-600 text-white hover:bg-green-700",
-    NetsQR: "bg-blue-600 text-white hover:bg-blue-700"
+    success: "bg-green-600 text-white hover:bg-green-700"
   };
   
   const sizes = {
@@ -46,7 +46,6 @@ export default function ExternalTransaction() {
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [success, setSuccess] = useState('');
-  const [showQRCode, setShowQRCode] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   useEffect(() => {
@@ -91,7 +90,7 @@ export default function ExternalTransaction() {
         },
         body: JSON.stringify({
           payment_status: status,
-          payment_method: status === 'paid' ? 'NetsQR' : 'other'
+          payment_method: status === 'paid' ? 'other' : 'other'
         }),
       });
 
@@ -118,51 +117,33 @@ export default function ExternalTransaction() {
     }
   };
 
-  const handleNetsQRPayment = async () => {
-    try {
-      setPaymentProcessing(true);
-      setError('');
-      setSuccess('');
-
-      // TODO: Implement NetsQR API integration
-      setShowQRCode(true);
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // TODO: Replace with actual NetsQR QR code generation
-      // const NetsQRResponse = await fetch('/api/NetsQR/generate-qr', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     amount: participant.amount_owed,
-      //     description: `${transaction.name} - ${participant.name}`,
-      //     merchant_id: process.env.VITE_NetsQR_MERCHANT_ID,
-      //     transaction_id: transaction.id,
-      //     callback_url: `${window.location.origin}/external/payment-callback/${token}`
-      //   })
-      // });
-
-      setSuccess('NetsQR QR code generated successfully! Scan to complete payment.');
-
-    } catch (error) {
-      console.error('NetsQR payment error:', error);
-      setError('Failed to generate NetsQR QR code. Please try again.');
-    } finally {
-      setPaymentProcessing(false);
-    }
-  };
-
   const handlePaymentComplete = async () => {
     try {
       setUpdating(true);
       await updatePaymentStatus('paid');
-      setShowQRCode(false);
       setSuccess('Payment completed successfully! Thank you.');
     } catch (error) {
       setError('Failed to update payment status.');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (result) => {
+    try {
+      setSuccess('Payment successful! Thank you for using PayNow.');
+      
+      // Update local state to reflect payment completion
+      setParticipant(prev => ({
+        ...prev,
+        payment_status: 'paid'
+      }));
+
+      // Clear any previous errors
+      setError('');
+      
+    } catch (error) {
+      console.error('Error handling payment success:', error);
     }
   };
 
@@ -223,9 +204,9 @@ export default function ExternalTransaction() {
   const statusInfo = getStatusText(participant.payment_status);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 w-full">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-white border-b border-slate-200 w-full">
         <div className="max-w-2xl mx-auto px-4 py-6">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-slate-900">PayPals Transaction</h1>
@@ -307,37 +288,6 @@ export default function ExternalTransaction() {
                 If you need to change this status, use the buttons below.
               </p>
             </div>
-          ) : showQRCode ? (
-            <div className="text-center py-6">
-              <div className="border-2 border-dashed border-blue-300 rounded-lg p-8 bg-blue-50">
-                <QrCode className="w-24 h-24 text-blue-600 mx-auto mb-4" />
-                <p className="text-blue-700 font-medium mb-2">NetsQR QR Code</p>
-                <p className="text-slate-600 text-sm mb-4">
-                  Scan this QR code with your banking app to pay ${parseFloat(participant.amount_owed).toFixed(2)}
-                </p>
-                <p className="text-xs text-slate-500 mb-4">
-                  {/* TODO: Replace with actual QR code */}
-                  QR Code will appear here when NetsQR integration is implemented
-                </p>
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    variant="success"
-                    size="sm"
-                    onClick={handlePaymentComplete}
-                    disabled={updating}
-                  >
-                    {updating ? 'Processing...' : '✅ Payment Completed'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowQRCode(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
           ) : (
             <div className="space-y-4">
               <div className="text-center py-4">
@@ -350,28 +300,20 @@ export default function ExternalTransaction() {
 
               {/* PayNow Payment Option */}
               <div className="border border-red-200 rounded-lg p-4 bg-red-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <QrCode className="w-6 h-6 text-red-600" />
-                    <div>
-                      <p className="font-medium text-slate-900">PayNow</p>
-                      <p className="text-slate-600 text-sm">Singapore's instant payment system</p>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <Button
-                      variant="primary"
-                      onClick={() => alert('PayNow integration needed for external transactions')}
-                      disabled={paymentProcessing}
-                      className="min-w-[120px] bg-red-600 hover:bg-red-700"
-                    >
-                      <span className="flex items-center gap-2">
-                        <QrCode className="w-4 h-4" />
-                        Pay with PayNow
-                      </span>
-                    </Button>
+                <div className="flex items-center gap-3 mb-3">
+                  <QrCode className="w-6 h-6 text-red-600" />
+                  <div>
+                    <p className="font-medium text-slate-900">PayNow</p>
+                    <p className="text-slate-600 text-sm">Singapore's instant payment system</p>
                   </div>
                 </div>
+                
+                <ExternalPayNowButton
+                  token={token}
+                  onPaymentSuccess={handlePaymentSuccess}
+                  onPaymentError={(error) => setError(error.message || 'Payment failed')}
+                  disabled={paymentProcessing}
+                />
               </div>
 
               {/* Manual Payment Status */}
@@ -403,8 +345,8 @@ export default function ExternalTransaction() {
 
           <div className="mt-4 p-3 bg-slate-50 rounded-lg">
             <p className="text-slate-700 text-sm">
-              <strong>💡 About NetsQR:</strong> NetsQR is a secure QR code payment system. 
-              Simply scan the code with your banking app to complete the payment instantly.
+              <strong>💡 About PayNow:</strong> PayNow is Singapore's instant payment system. 
+              Simply scan the QR code with your banking app to complete the payment instantly.
             </p>
           </div>
         </Card>

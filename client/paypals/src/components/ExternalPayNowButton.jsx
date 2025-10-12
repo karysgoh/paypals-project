@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, QrCode, Phone, CreditCard, AlertCircle, Loader2, Download } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, QrCode, Loader2, Download, AlertCircle } from 'lucide-react';
 
-const PayNowButton = ({ 
-  transactionId, 
+const ExternalPayNowButton = ({ 
+  token, 
   onPaymentSuccess, 
   onPaymentError, 
   disabled = false,
@@ -18,38 +18,38 @@ const PayNowButton = ({
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
   /**
-   * Generate PayNow QR code for the transaction
-   * 
-   * This calls our backend API which:
-   * 1. Validates the transaction and user permissions
-   * 2. Checks recipient has PayNow enabled
-   * 3. Generates EMV-compliant QR data
-   * 4. Returns QR code image and payment details
+   * Generate PayNow QR code for external transaction
    */
   const generatePayNowQR = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${apiBase}/paynow/${transactionId}/qr`, {
+      console.log(`[ExternalPayNowButton] Generating QR for token: ${token}`);
+      console.log(`[ExternalPayNowButton] API URL: ${apiBase}/paynow/external/${token}/qr`);
+
+      const response = await fetch(`${apiBase}/paynow/external/${token}/qr`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-        },
-        credentials: 'include'  // Use cookie-based authentication
+        }
       });
+
+      console.log(`[ExternalPayNowButton] Response status: ${response.status}`);
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error(`[ExternalPayNowButton] Error response:`, errorData);
         throw new Error(errorData.message || 'Failed to generate PayNow QR');
       }
 
       const data = await response.json();
+      console.log(`[ExternalPayNowButton] Success response:`, data);
       setQrData(data.data);
       setShowQR(true);
 
     } catch (err) {
-      console.error('PayNow QR generation error:', err);
+      console.error('External PayNow QR generation error:', err);
       setError(err.message);
       if (onPaymentError) {
         onPaymentError(err);
@@ -61,23 +61,19 @@ const PayNowButton = ({
 
   /**
    * Confirm that payment has been made
-   * 
-   * Called when user clicks "I've Made the Payment"
-   * This updates the transaction status in our database
    */
   const confirmPayment = async () => {
     try {
       setConfirming(true);
       setError(null);
 
-      const response = await fetch(`${apiBase}/paynow/${transactionId}/confirm`, {
+      const response = await fetch(`${apiBase}/paynow/external/${token}/confirm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include',  // Use cookie-based authentication
         body: JSON.stringify({
-          paymentReference: qrData?.paymentInfo?.reference || `PayPals-${transactionId}`
+          paymentReference: qrData?.paymentInfo?.reference || `PayPals-${Date.now()}`
         })
       });
 
@@ -91,7 +87,6 @@ const PayNowButton = ({
       // Call success callback
       if (onPaymentSuccess) {
         onPaymentSuccess({
-          transactionId,
           paymentMethod: 'paynow',
           paymentReference: qrData?.paymentInfo?.reference
         });
@@ -102,7 +97,7 @@ const PayNowButton = ({
       setQrData(null);
 
     } catch (err) {
-      console.error('Payment confirmation error:', err);
+      console.error('External payment confirmation error:', err);
       setError(err.message);
       if (onPaymentError) {
         onPaymentError(err);
@@ -125,12 +120,10 @@ const PayNowButton = ({
     if (!qrData?.qrCodeDataURL) return;
 
     try {
-      // Create a temporary anchor element for download
       const link = document.createElement('a');
       link.href = qrData.qrCodeDataURL;
       link.download = `PayNow-QR-${qrData.paymentInfo.recipient}-${qrData.paymentInfo.amount}SGD.png`;
       
-      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -163,43 +156,27 @@ const PayNowButton = ({
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="text-sm font-medium text-red-800">Payment Error</h4>
-            <p className="text-sm text-red-600 mt-1">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start space-x-2">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-red-700">
+            <p className="font-medium">PayNow Error</p>
+            <p>{error}</p>
           </div>
         </div>
       )}
 
-      {/* QR Code Modal */}
+      {/* PayNow QR Modal */}
       {showQR && qrData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="bg-red-600 text-white p-4 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">PayNow Payment</h3>
-                <button
-                  onClick={closeQR}
-                  className="text-white hover:bg-red-700 rounded p-1"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 min-h-screen">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="p-6 space-y-6">
-              {/* Payment Info */}
-              <div className="text-center space-y-2">
-                <h4 className="text-lg font-semibold text-gray-900">
-                  Pay {qrData.paymentInfo.recipient}
-                </h4>
-                <div className="text-3xl font-bold text-red-600">
-                  ${parseFloat(qrData.paymentInfo.amount || 0).toFixed(2)}
+              {/* Header */}
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <QrCode className="w-6 h-6 text-red-600" />
                 </div>
-                <p className="text-sm text-gray-600">
+                <h3 className="text-xl font-semibold text-gray-900">PayNow Payment</h3>
+                <p className="text-sm text-gray-600 mt-1">
                   {qrData.paymentInfo.description}
                 </p>
               </div>
@@ -212,14 +189,6 @@ const PayNowButton = ({
                     alt="PayNow QR Code" 
                     className="w-48 h-48"
                   />
-                  {/* Download Button */}
-                  <button
-                    onClick={downloadQRCode}
-                    className="absolute top-2 right-2 bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-                    title="Download QR Code"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
 
@@ -309,4 +278,4 @@ const PayNowButton = ({
   );
 };
 
-export default PayNowButton;
+export default ExternalPayNowButton;

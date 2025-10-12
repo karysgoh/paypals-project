@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check, Clock, Users, DollarSign, UserPlus, X } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 
@@ -203,26 +203,32 @@ export default function NotificationBell() {
 
   // Load initial data and set up polling
   useEffect(() => {
+    let interval;
+    
     if (currentUser) {
       loadUnreadCount();
       
       // Poll for new notifications every 30 seconds
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         loadUnreadCount();
       }, 30000);
-
-      return () => clearInterval(interval);
     }
-  }, [currentUser]);
 
-  const loadUnreadCount = async () => {
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [currentUser]); // Remove loadUnreadCount from dependencies to prevent infinite loop
+
+  const loadUnreadCount = useCallback(async () => {
     try {
       const response = await api.getUnreadCount();
       setUnreadCount(response.data.unread_count);
     } catch (error) {
       console.error('Error loading unread count:', error);
     }
-  };
+  }, []); // Empty dependency array since this function doesn't depend on any changing values
 
   const loadNotifications = async () => {
     if (loading) return;

@@ -355,7 +355,6 @@ module.exports = {
                         id: true,
                         username: true,
                         paynow_phone: true,
-                        paynow_nric: true,
                         paynow_enabled: true
                     }
                 });
@@ -369,14 +368,12 @@ module.exports = {
                     where: { id: userId },
                     data: {
                         paynow_phone: paymentData.paynow_phone || null,
-                        paynow_nric: paymentData.paynow_nric || null,
                         paynow_enabled: paymentData.paynow_enabled || false
                     },
                     select: {
                         id: true,
                         username: true,
                         paynow_phone: true,
-                        paynow_nric: true,
                         paynow_enabled: true
                     }
                 });
@@ -410,7 +407,6 @@ module.exports = {
                     id: true,
                     username: true,
                     paynow_phone: true,
-                    paynow_nric: true,
                     paynow_enabled: true
                 }
             });
