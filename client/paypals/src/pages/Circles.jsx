@@ -13,6 +13,8 @@ import {
   ArrowLeft
 } from "lucide-react";
 
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
 const Button = ({ children, variant = "default", size = "default", className = "", onClick, disabled, ...props }) => {
   const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
   
@@ -74,12 +76,12 @@ export default function Circles() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const userRes = await fetch('http://localhost:3000/api/me', { credentials: 'include' });
+      const userRes = await fetch(`${apiBase}/me`, { credentials: 'include' });
       if (!userRes.ok) throw new Error('Failed to fetch user');
       const currentUser = await userRes.json();
       setUser(currentUser);
 
-      const circlesRes = await fetch('http://localhost:3000/api/circles/user', { credentials: 'include' });
+      const circlesRes = await fetch(`${apiBase}/circles/user`, { credentials: 'include' });
       if (!circlesRes.ok) throw new Error('Failed to fetch circles');
       const userCircles = await circlesRes.json();
       setCircles(userCircles.data || []);
@@ -91,7 +93,7 @@ export default function Circles() {
 
   const loadInvitations = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/invitations/my', { credentials: 'include' });
+      const res = await fetch(`${apiBase}/invitations/my`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch invitations');
       const result = await res.json();
       const allInvitations = result.data.invitations || [];
@@ -124,7 +126,7 @@ export default function Circles() {
         name: newCircleName,
         type: newCircleType || undefined,
       };
-      const res = await fetch('http://localhost:3000/api/circles', {
+      const res = await fetch(`${apiBase}/circles`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -146,7 +148,7 @@ export default function Circles() {
       setErrorMessage("");
       setProcessingInvitation(invitationId);
       
-      const res = await fetch(`http://localhost:3000/api/invitations/${invitationId}/accept`, {
+      const res = await fetch(`${apiBase}/invitations/${invitationId}/accept`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
@@ -183,7 +185,7 @@ export default function Circles() {
       setErrorMessage("");
       setProcessingInvitation(invitationId);
       
-      const res = await fetch(`http://localhost:3000/api/invitations/${invitationId}/reject`, {
+      const res = await fetch(`${apiBase}/invitations/${invitationId}/reject`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }

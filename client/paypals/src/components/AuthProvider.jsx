@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext(undefined);
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -16,7 +17,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     async function fetchMe() {
       try {
-        const res = await fetch("http://localhost:3000/api/me", {
+        const res = await fetch(`${apiBase}/me`, {
           credentials: "include",
         });
 
@@ -37,7 +38,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function handleLogin(credentials) {
-    const res = await fetch("http://localhost:3000/api/login", {
+    const res = await fetch(`${apiBase}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -58,7 +59,7 @@ export function AuthProvider({ children }) {
 
   async function handleRegister(credentials) {
     try {
-      const res = await fetch("http://localhost:3000/api/register", {
+      const res = await fetch(`${apiBase}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -94,7 +95,7 @@ export function AuthProvider({ children }) {
 
   async function handleLogout() {
     console.log("Logging out...");
-    await fetch("http://localhost:3000/api/logout", {
+    await fetch(`${apiBase}/logout`, {
       method: "POST",
       credentials: "include",
     });

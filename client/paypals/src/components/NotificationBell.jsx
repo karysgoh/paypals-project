@@ -3,7 +3,7 @@ import { Bell, Check, Clock, Users, DollarSign, UserPlus, X } from 'lucide-react
 import { useAuth } from './AuthProvider';
 
 const api = {
-  baseURL: 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;

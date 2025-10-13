@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import Notification from "../components/Notification";
 import { useNotification } from "../hooks/useNotification";
 
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
 const PaymentSettings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -22,7 +24,7 @@ const PaymentSettings = () => {
 
   const loadPaymentMethods = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/users/payment-methods', {
+      const response = await fetch(`${apiBase}/paynow/settings`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -86,13 +88,16 @@ const PaymentSettings = () => {
 
     setSaving(true);
     try {
-      const response = await fetch('http://localhost:3000/api/users/payment-methods', {
-        method: 'PUT',
+      const response = await fetch(`${apiBase}/paynow/settings`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(paymentMethods)
+        body: JSON.stringify({
+          payNowPhone: paymentMethods.paynow_phone,
+          enabled: paymentMethods.paynow_enabled
+        })
       });
 
       if (response.ok) {
@@ -169,7 +174,7 @@ const PaymentSettings = () => {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Payment Settings</h1>
                 <p className="mt-2 text-gray-600">
-                  Manage your PayNow settings for receiving payments
+                  Manage your PayNow phone number for receiving payments
                 </p>
               </div>
             </div>
@@ -202,7 +207,7 @@ const PaymentSettings = () => {
             {/* PayNow Phone Number */}
             <div>
               <label htmlFor="paynow_phone" className="block text-sm font-medium text-gray-700 mb-2">
-                PayNow Phone Number
+                PayNow Phone Number <span className="text-red-500">*</span>
               </label>
               <input
                 type="tel"
@@ -210,12 +215,13 @@ const PaymentSettings = () => {
                 name="paynow_phone"
                 value={paymentMethods.paynow_phone}
                 onChange={handleInputChange}
-                placeholder="+65 8123 4567 or 81234567"
+                placeholder="+65 9123 4567 or 91234567"
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 disabled={!paymentMethods.paynow_enabled}
+                required={paymentMethods.paynow_enabled}
               />
               <p className="mt-2 text-sm text-gray-500">
-                Singapore mobile number registered with PayNow
+                Singapore mobile number (starting with 8 or 9) registered with PayNow
               </p>
             </div>
 
@@ -233,9 +239,10 @@ const PaymentSettings = () => {
                   </h3>
                   <div className="mt-2 text-sm text-yellow-700">
                     <ul className="list-disc list-inside space-y-1">
-                      <li>You need at least one PayNow identifier (phone number) to enable PayNow</li>
+                      <li>You need a PayNow phone number to enable PayNow</li>
                       <li>Make sure your phone number is registered with PayNow in your bank app</li>
-                      <li>Others will be able to pay you directly using this PayNow identifier</li>
+                      <li>Others will be able to pay you directly using your PayNow phone number</li>
+                      <li>Only Singapore mobile numbers starting with 8 or 9 are supported</li>
                       <li>Keep your information up to date for seamless transactions</li>
                     </ul>
                   </div>

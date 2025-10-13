@@ -281,7 +281,7 @@ const AllTransactions = () => {
 
   // API client matching Dashboard's approach
   const api = {
-    baseURL: 'http://localhost:3000/api',
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
     
     async request(endpoint, options = {}) {
       const url = `${this.baseURL}${endpoint}`;

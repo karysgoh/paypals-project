@@ -6,7 +6,13 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/index.js",
     "start": "node index.js",
-    "seed_data": "node src/configs/seedData.js"
+    "seed_data": "node src/configs/seedData.js",
+    "build": "npm install && npx prisma generate",
+    "deploy": "npx prisma migrate deploy && node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "author": "karys",
   "license": "ISC",

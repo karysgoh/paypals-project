@@ -16,12 +16,18 @@ app.set('trust proxy', 1);
 // CORS CONFIGURATION
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5174"
-];
+  "http://localhost:5174",
+  process.env.FRONTEND_URL, // Production frontend URL
+].filter(Boolean); // Remove undefined values
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list or matches Render pattern
+    if (allowedOrigins.includes(origin) || 
+        (process.env.NODE_ENV === 'production' && origin.includes('.onrender.com'))) {
       callback(null, true);
     } else {
       logger.warn("CORS blocked for invalid origin", { origin });

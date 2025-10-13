@@ -82,7 +82,7 @@ const Badge = ({ children, variant = "default", className = "", ...props }) => {
 };
 
 const api = {
-  baseURL: 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
@@ -383,7 +383,7 @@ export default function Dashboard() {
     if (!currentUser) return;
     
     try {
-      const response = await fetch(`http://localhost:3000/api/invitations/my`, {
+      const response = await fetch(`${api.baseURL}/invitations/my`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -436,7 +436,7 @@ export default function Dashboard() {
       setProcessingInvitation(invitationId);
       setErrorMessage('');
       
-      const response = await fetch(`http://localhost:3000/api/invitations/${invitationId}/accept`, {
+      const response = await fetch(`${api.baseURL}/invitations/${invitationId}/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -468,7 +468,7 @@ export default function Dashboard() {
       setProcessingInvitation(invitationId);
       setErrorMessage('');
       
-      const response = await fetch(`http://localhost:3000/api/invitations/${invitationId}/reject`, {
+      const response = await fetch(`${api.baseURL}/invitations/${invitationId}/reject`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
