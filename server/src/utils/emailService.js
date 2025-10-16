@@ -3,24 +3,30 @@ const logger = require('../logger');
 
 // Create transporter
 const createTransporter = () => {
-  if (process.env.NODE_ENV === 'development') {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS 
-      }
-    });
-  }
+  // Try multiple environment variable names for flexibility
+  const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com';
+  const emailPass = process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || 'gmdn swjq lfpg vklr';
+  
+  console.log('Email configuration:', {
+    NODE_ENV: process.env.NODE_ENV,
+    emailUser: emailUser ? emailUser.substring(0, 3) + '***' : 'MISSING',
+    emailPass: emailPass ? 'SET' : 'MISSING',
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT
+  });
 
-  // For production, use your preferred email service
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
-    secure: false, // true for 465, false for other ports
+  // Use Gmail service configuration - simpler and more reliable
+  return nodemailer.createTransporter({
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
+      user: emailUser,
+      pass: emailPass
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
 };

@@ -192,6 +192,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// ROOT ROUTE
+app.get('/', (req, res) => {
+  res.json({
+    message: 'PayPals Backend API',
+    version: '1.0.0',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/login, /api/register',
+      users: '/api/users',
+      circles: '/api/circles',
+      transactions: '/api/transactions'
+    }
+  });
+});
+
 // API ROUTES
 const mainRoutes = require('./routes/mainRoutes');
 app.use('/api', mainRoutes);

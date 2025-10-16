@@ -32,13 +32,27 @@ module.exports = {
     createNewUser: async (data) => {
         try {
             const result = await prisma.$transaction(async (tx) => {
+                // Ensure default 'user' role exists
+                let userRole = await tx.role.findUnique({
+                    where: { role_name: 'user' }
+                });
+                
+                if (!userRole) {
+                    userRole = await tx.role.create({
+                        data: {
+                            role_name: 'user',
+                            description: 'Basic user role with standard permissions'
+                        }
+                    });
+                }
+
                 const newUser = await tx.user.create({
                     data: {
                         username: data.username,
                         password: data.password,    
                         email: data.email,          
                         email_verified: false,
-                        role_id: data.role_id || 1, 
+                        role_id: data.role_id || userRole.id, 
                         status: 'active'           
                     },
                     select: {

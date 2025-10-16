@@ -123,7 +123,12 @@ const RegisterPage = () => {
         email: formData.email,
       });
       showNotification(response.message || "Verification email sent. Please check your inbox.", 'success');
-      sessionStorage.setItem("registrationEmail", formData.email); 
+      sessionStorage.setItem("registrationEmail", formData.email);
+      
+      // Redirect to verification page after successful registration
+      setTimeout(() => {
+        navigate('/verify-email');
+      }, 2000); // Give user time to see success message
     } catch (error) {
       console.error("Register failed:", error);
       

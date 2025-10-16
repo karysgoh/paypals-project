@@ -31,6 +31,18 @@ router.use(sanitizeRequest);
 //////////////////////////////////////////////////////
 // DEFINE ROUTES
 //////////////////////////////////////////////////////
+
+// [GET] Health check endpoint
+router.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'PayPals Backend API',
+    version: '1.0.0'
+  });
+});
+
 // [POST] User login 
 router.post(
   "/login",

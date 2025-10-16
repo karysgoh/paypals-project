@@ -12,12 +12,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    copyPublicDir: true, // Ensure public directory files are copied
     rollupOptions: {
       output: {
         manualChunks: undefined,
       },
     },
   },
+  publicDir: 'public', // Explicitly set public directory
   server: {
     port: 5173,
     host: true,
