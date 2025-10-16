@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const logger = require('../logger');
 
-// Create transporter
+// Create transporter with improved configuration and timeout handling
 const createTransporter = () => {
   // Try multiple environment variable names for flexibility
   const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com';
@@ -15,19 +15,28 @@ const createTransporter = () => {
     SMTP_PORT: process.env.SMTP_PORT
   });
 
-  // Use Gmail service configuration - simpler and more reliable
+  // Enhanced Gmail configuration with better timeout and connection settings
   return nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false,
+    secure: false, // Use STARTTLS
     auth: {
       user: emailUser,
       pass: emailPass
     },
     tls: {
-      rejectUnauthorized: false
-    }
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
+    },
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,   // 30 seconds
+    socketTimeout: 60000,     // 60 seconds
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+    rateLimit: 14, // max 14 messages/second
+    debug: process.env.NODE_ENV === 'development'
   });
 };
 
@@ -35,12 +44,26 @@ const sendVerificationEmail = async (email, token, username) => {
   try {
     const transporter = createTransporter();
     
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
+    // Test the connection first with timeout
+    console.log('Testing SMTP connection...');
+    const connectionTest = await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection test timeout')), 10000)
+      )
+    ]);
+    
+    if (!connectionTest) {
+      throw new Error('SMTP connection verification failed');
+    }
+    console.log('SMTP connection verified successfully');
+    
+    const verificationUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/verify-email/${token}`;
     
     const mailOptions = {
       from: {
         name: 'PayPals Team',
-        address: process.env.SMTP_USER
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
       },
       to: email,
       subject: 'Verify Your PayPals Account',
@@ -105,13 +128,42 @@ const sendVerificationEmail = async (email, token, username) => {
       `
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    // Send email with timeout
+    console.log(`Sending verification email to ${email}...`);
+    const info = await Promise.race([
+      transporter.sendMail(mailOptions),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email send timeout')), 30000)
+      )
+    ]);
+    
     logger.info(`Verification email sent to ${email}: ${info.messageId}`);
     return info;
     
   } catch (error) {
-    logger.error(`Failed to send verification email to ${email}: ${error.message}`);
-    throw error;
+    // Enhanced error logging with more details
+    logger.error(`Failed to send verification email to ${email}:`, {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname,
+      stack: error.stack
+    });
+    
+    // In development, we might want to see the full error
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Full email error details:', error);
+    }
+    
+    // Don't throw error - allow registration to continue even if email fails
+    // This is a temporary workaround for SMTP connection issues
+    console.log(`Email sending failed for ${email}, but registration will continue`);
+    return { 
+      success: false, 
+      error: error.message,
+      note: 'Registration completed but verification email could not be sent. You can request a new verification email later.'
+    };
   }
 };
 

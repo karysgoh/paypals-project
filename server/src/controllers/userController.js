@@ -65,12 +65,22 @@ module.exports = {
         user_id: results.id
       });
 
-      // Send verification email
+      // Send verification email (non-blocking)
+      let emailResult = null;
       try {
-        await sendVerificationEmail(email, verificationToken, username);
-        logger.info(`Verification email sent to ${email}`);
+        emailResult = await sendVerificationEmail(email, verificationToken, username);
+        if (emailResult.success !== false) {
+          logger.info(`Verification email sent to ${email}`);
+        } else {
+          logger.warn(`Verification email failed for ${email}: ${emailResult.error}`);
+        }
       } catch (emailError) {
         logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
+        emailResult = { 
+          success: false, 
+          error: emailError.message,
+          note: 'Registration completed but verification email could not be sent. You can request a new verification email later.'
+        };
       }
 
       // Send welcome notification
@@ -82,13 +92,23 @@ module.exports = {
       }
 
       logger.info(`User ${data.username} successfully created`);
-      res.locals.message = `User ${data.username} successfully created. Please check your email to verify your account.`;
+      
+      // Customize response message based on email sending status
+      let responseMessage = `User ${data.username} successfully created.`;
+      if (emailResult && emailResult.success === false) {
+        responseMessage += ` ${emailResult.note || 'Verification email could not be sent at this time, but you can request a new one later.'}`;
+      } else {
+        responseMessage += ` Please check your email to verify your account.`;
+      }
+      
+      res.locals.message = responseMessage;
       res.locals.user_id = results.id;           
       res.locals.username = results.username;
       res.locals.email = results.email;
       res.locals.role_id = results.role?.id || null;      
       res.locals.role_name = results.role?.role_name || null; 
       res.locals.email_verified = results.email_verified || false;
+      res.locals.email_status = emailResult || { success: true };
       next();
     } catch (error) {
       // Handle unique constraint violations
