@@ -65,17 +65,15 @@ module.exports = {
         user_id: results.id
       });
 
-      // Send verification email (non-blocking)
+      // Send verification email (non-blocking with improved error handling)
       let emailResult = null;
       try {
         emailResult = await sendVerificationEmail(email, verificationToken, username);
-        if (emailResult.success !== false) {
-          logger.info(`Verification email sent to ${email}`);
-        } else {
-          logger.warn(`Verification email failed for ${email}: ${emailResult.error}`);
-        }
+        logger.info(`Verification email sent to ${email}`);
+        emailResult = { success: true };
       } catch (emailError) {
         logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
+        console.log(`Email sending failed for ${email}, but registration will continue`);
         emailResult = { 
           success: false, 
           error: emailError.message,

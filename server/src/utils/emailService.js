@@ -1,5 +1,11 @@
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const logger = require('../logger');
+
+// Configure SendGrid
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 // Create transporter with improved configuration and timeout handling
 const createTransporter = () => {
@@ -11,6 +17,7 @@ const createTransporter = () => {
     NODE_ENV: process.env.NODE_ENV,
     emailUser: emailUser ? emailUser.substring(0, 3) + '***' : 'MISSING',
     emailPass: emailPass ? 'SET' : 'MISSING',
+    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? 'SET' : 'MISSING',
     SMTP_HOST: process.env.SMTP_HOST,
     SMTP_PORT: process.env.SMTP_PORT
   });
@@ -29,9 +36,9 @@ const createTransporter = () => {
       rejectUnauthorized: false,
       ciphers: 'SSLv3'
     },
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 30000,   // 30 seconds
-    socketTimeout: 60000,     // 60 seconds
+    connectionTimeout: 10000, // Reduced to 10 seconds
+    greetingTimeout: 10000,   // Reduced to 10 seconds
+    socketTimeout: 20000,     // Reduced to 20 seconds
     pool: true,
     maxConnections: 3,
     maxMessages: 100,
@@ -40,130 +47,147 @@ const createTransporter = () => {
   });
 };
 
-const sendVerificationEmail = async (email, token, username) => {
-  try {
-    const transporter = createTransporter();
-    
-    // Test the connection first with timeout
-    console.log('Testing SMTP connection...');
-    const connectionTest = await Promise.race([
-      transporter.verify(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection test timeout')), 10000)
-      )
-    ]);
-    
-    if (!connectionTest) {
-      throw new Error('SMTP connection verification failed');
-    }
-    console.log('SMTP connection verified successfully');
-    
-    const verificationUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/verify-email/${token}`;
-    
-    const mailOptions = {
-      from: {
-        name: 'PayPals Team',
-        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
-      },
-      to: email,
-      subject: 'Verify Your PayPals Account',
-      html: `
-        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-          <div style="background-color: #4F46E5; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">Welcome to PayPals!</h1>
-          </div>
-          
-          <div style="padding: 30px; background-color: #f9fafb;">
-            <h2 style="color: #374151;">Hi ${username}! 👋</h2>
-            
-            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              Thanks for joining PayPals - the easiest way to split bills with friends! 
-              To get started, we need to verify your email address.
-            </p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${verificationUrl}" 
-                 style="background-color: #4F46E5; color: white; padding: 12px 30px; 
-                        text-decoration: none; border-radius: 8px; font-weight: bold; 
-                        display: inline-block;">
-                Verify Email Address
-              </a>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px;">
-              If the button doesn't work, copy and paste this link into your browser:
-              <br>
-              <a href="${verificationUrl}" style="color: #4F46E5; word-break: break-all;">
-                ${verificationUrl}
-              </a>
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 30px 0;">
-            
-            <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
-              This verification link will expire in 24 hours.<br>
-              If you didn't create a PayPals account, you can safely ignore this email.
-            </p>
-          </div>
-          
-          <div style="background-color: #374151; padding: 20px; text-align: center;">
-            <p style="color: #9CA3AF; margin: 0; font-size: 12px;">
-              © 2024 PayPals. Made with ❤️ for friend groups who split bills together.
-            </p>
-          </div>
-        </div>
-      `,
-      text: `
-        Welcome to PayPals, ${username}!
-        
-        Please verify your email address by clicking the link below:
-        ${verificationUrl}
-        
-        This link will expire in 24 hours.
-        
-        If you didn't create a PayPals account, you can safely ignore this email.
-        
-        Best regards,
-        The PayPals Team
-      `
-    };
+// SendGrid email sending function
+const sendEmailWithSendGrid = async (to, subject, html, text) => {
+  if (!process.env.SENDGRID_API_KEY) {
+    throw new Error('SendGrid API key not configured');
+  }
 
-    // Send email with timeout
-    console.log(`Sending verification email to ${email}...`);
-    const info = await Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Email send timeout')), 30000)
-      )
-    ]);
+  const msg = {
+    to,
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@paypals.app',
+      name: 'PayPals Team'
+    },
+    subject,
+    html,
+    text
+  };
+
+  console.log('Sending email via SendGrid...');
+  const result = await sgMail.send(msg);
+  console.log('SendGrid email sent successfully');
+  return result;
+};
+
+const sendVerificationEmail = async (email, token, username) => {
+  const verificationUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/verify-email/${token}`;
+  
+  const htmlContent = `
+    <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+      <div style="background-color: #4F46E5; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">Welcome to PayPals!</h1>
+      </div>
+      
+      <div style="padding: 30px; background-color: #f9fafb;">
+        <h2 style="color: #374151;">Hi ${username}! 👋</h2>
+        
+        <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
+          Thanks for joining PayPals - the easiest way to split bills with friends! 
+          To get started, we need to verify your email address.
+        </p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 30px; 
+                    text-decoration: none; border-radius: 8px; font-weight: bold; 
+                    display: inline-block;">
+            Verify Email Address
+          </a>
+        </div>
+        
+        <p style="color: #6B7280; font-size: 14px;">
+          If the button doesn't work, copy and paste this link into your browser:
+          <br>
+          <a href="${verificationUrl}" style="color: #4F46E5; word-break: break-all;">
+            ${verificationUrl}
+          </a>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 30px 0;">
+        
+        <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
+          This verification link will expire in 24 hours.<br>
+          If you didn't create a PayPals account, you can safely ignore this email.
+        </p>
+      </div>
+      
+      <div style="background-color: #374151; padding: 20px; text-align: center;">
+        <p style="color: #9CA3AF; margin: 0; font-size: 12px;">
+          © 2024 PayPals. Made with ❤️ for friend groups who split bills together.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const textContent = `
+    Welcome to PayPals, ${username}!
     
-    logger.info(`Verification email sent to ${email}: ${info.messageId}`);
-    return info;
+    Please verify your email address by clicking the link below:
+    ${verificationUrl}
     
-  } catch (error) {
-    // Enhanced error logging with more details
-    logger.error(`Failed to send verification email to ${email}:`, {
-      message: error.message,
-      code: error.code,
-      errno: error.errno,
-      syscall: error.syscall,
-      hostname: error.hostname,
-      stack: error.stack
-    });
+    This link will expire in 24 hours.
     
-    // In development, we might want to see the full error
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Full email error details:', error);
+    If you didn't create a PayPals account, you can safely ignore this email.
+    
+    Best regards,
+    The PayPals Team
+  `;
+
+  // Try SendGrid first, then fallback to SMTP
+  try {
+    console.log(`Attempting to send verification email to ${email} via SendGrid...`);
+    const result = await sendEmailWithSendGrid(email, 'Verify Your PayPals Account', htmlContent, textContent);
+    logger.info(`Verification email sent via SendGrid to ${email}`);
+    return result;
+  } catch (sendGridError) {
+    console.log(`SendGrid failed: ${sendGridError.message}, trying SMTP...`);
+    
+    // Fallback to SMTP with faster timeout
+    try {
+      const transporter = createTransporter();
+      
+      // Quick connection test with reduced timeout
+      console.log('Testing SMTP connection...');
+      const connectionTest = await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection test timeout')), 5000) // Reduced to 5 seconds
+        )
+      ]);
+      
+      if (!connectionTest) {
+        throw new Error('SMTP connection verification failed');
+      }
+      console.log('SMTP connection verified successfully');
+      
+      const mailOptions = {
+        from: {
+          name: 'PayPals Team',
+          address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
+        },
+        to: email,
+        subject: 'Verify Your PayPals Account',
+        html: htmlContent,
+        text: textContent
+      };
+
+      // Send email with timeout
+      console.log(`Sending verification email to ${email} via SMTP...`);
+      const info = await Promise.race([
+        transporter.sendMail(mailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email send timeout')), 15000) // Reduced to 15 seconds
+        )
+      ]);
+      
+      logger.info(`Verification email sent via SMTP to ${email}: ${info.messageId}`);
+      return info;
+    } catch (smtpError) {
+      // Both methods failed
+      const combinedError = new Error(`Both SendGrid and SMTP failed. SendGrid: ${sendGridError.message}, SMTP: ${smtpError.message}`);
+      throw combinedError;
     }
-    
-    // Don't throw error - allow registration to continue even if email fails
-    // This is a temporary workaround for SMTP connection issues
-    console.log(`Email sending failed for ${email}, but registration will continue`);
-    return { 
-      success: false, 
-      error: error.message,
-      note: 'Registration completed but verification email could not be sent. You can request a new verification email later.'
-    };
   }
 };
 
