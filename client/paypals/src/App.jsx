@@ -49,6 +49,7 @@ function App() {
             <Route path="/tutorial" element={<></>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/external/transaction/:token" element={<ExternalTransaction />} />
             <Route path="/external/pay/:token" element={<ExternalTransaction />} />

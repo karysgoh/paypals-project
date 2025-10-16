@@ -122,13 +122,19 @@ const RegisterPage = () => {
         password: formData.password,
         email: formData.email,
       });
-      showNotification(response.message || "Verification email sent. Please check your inbox.", 'success');
+      console.log('Registration successful, response:', response);
+      showNotification(response.message || "Registration successful! Redirecting to verification page...", 'success');
       sessionStorage.setItem("registrationEmail", formData.email);
       
-      // Redirect to verification page after successful registration
-      setTimeout(() => {
+      // Immediate redirect to verification page after successful registration
+      console.log('Navigating to verify-email page...');
+      try {
         navigate('/verify-email');
-      }, 2000); // Give user time to see success message
+      } catch (navError) {
+        console.error('Navigation failed, trying alternative method:', navError);
+        // Fallback: use window.location
+        window.location.href = '/verify-email';
+      }
     } catch (error) {
       console.error("Register failed:", error);
       
