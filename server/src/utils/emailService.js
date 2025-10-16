@@ -16,7 +16,7 @@ const createTransporter = () => {
   });
 
   // Use Gmail service configuration - simpler and more reliable
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
