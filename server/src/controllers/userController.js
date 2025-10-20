@@ -69,8 +69,19 @@ module.exports = {
       let emailResult = null;
       try {
         emailResult = await sendVerificationEmail(email, verificationToken, username);
-        logger.info(`Verification email sent to ${email}`);
-        emailResult = { success: true };
+        
+        // Handle development mode
+        if (emailResult.mode === 'development') {
+          logger.info(`Development mode: Email verification skipped for ${email}`);
+          emailResult = { 
+            success: true, 
+            mode: 'development',
+            note: 'Development mode: Email verification was skipped. Account is ready to use.'
+          };
+        } else {
+          logger.info(`Verification email sent to ${email}`);
+          emailResult = { success: true };
+        }
       } catch (emailError) {
         logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
         console.log(`Email sending failed for ${email}, but registration will continue`);

@@ -1,13 +1,7 @@
 const nodemailer = require('nodemailer');
-const sgMail = require('@sendgrid/mail');
 const logger = require('../logger');
 
-// Configure SendGrid
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
-
-// Create transporter with improved configuration and timeout handling
+// Create transporter with improved configuration and multiple SMTP options
 const createTransporter = () => {
   // Try multiple environment variable names for flexibility
   const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com';
@@ -17,12 +11,32 @@ const createTransporter = () => {
     NODE_ENV: process.env.NODE_ENV,
     emailUser: emailUser ? emailUser.substring(0, 3) + '***' : 'MISSING',
     emailPass: emailPass ? 'SET' : 'MISSING',
-    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? 'SET' : 'MISSING',
     SMTP_HOST: process.env.SMTP_HOST,
     SMTP_PORT: process.env.SMTP_PORT
   });
 
-  // Enhanced Gmail configuration with better timeout and connection settings
+  // Try custom SMTP first if configured, otherwise use Gmail
+  if (process.env.SMTP_HOST && process.env.SMTP_PORT) {
+    console.log('Using custom SMTP configuration');
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT),
+      secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+      auth: {
+        user: emailUser,
+        pass: emailPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000
+    });
+  }
+
+  // Default to Gmail with optimized settings
+  console.log('Using Gmail SMTP configuration');
   return nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
@@ -36,9 +50,9 @@ const createTransporter = () => {
       rejectUnauthorized: false,
       ciphers: 'SSLv3'
     },
-    connectionTimeout: 10000, // Reduced to 10 seconds
-    greetingTimeout: 10000,   // Reduced to 10 seconds
-    socketTimeout: 20000,     // Reduced to 20 seconds
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,   // 10 seconds  
+    socketTimeout: 20000,     // 20 seconds
     pool: true,
     maxConnections: 3,
     maxMessages: 100,
@@ -47,30 +61,19 @@ const createTransporter = () => {
   });
 };
 
-// SendGrid email sending function
-const sendEmailWithSendGrid = async (to, subject, html, text) => {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SendGrid API key not configured');
+const sendVerificationEmail = async (email, token, username) => {
+  // Development mode: Skip email sending and auto-verify
+  if (process.env.NODE_ENV === 'development' || process.env.SKIP_EMAIL_VERIFICATION === 'true') {
+    console.log(`📧 DEVELOPMENT MODE: Skipping email verification for ${email}`);
+    console.log(`🔗 Verification URL: ${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/verify-email/${token}`);
+    logger.info(`Development mode: Email verification skipped for ${email}`);
+    return {
+      success: true,
+      mode: 'development',
+      message: 'Email verification skipped in development mode'
+    };
   }
 
-  const msg = {
-    to,
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@paypals.app',
-      name: 'PayPals Team'
-    },
-    subject,
-    html,
-    text
-  };
-
-  console.log('Sending email via SendGrid...');
-  const result = await sgMail.send(msg);
-  console.log('SendGrid email sent successfully');
-  return result;
-};
-
-const sendVerificationEmail = async (email, token, username) => {
   const verificationUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/verify-email/${token}`;
   
   const htmlContent = `
@@ -134,60 +137,48 @@ const sendVerificationEmail = async (email, token, username) => {
     The PayPals Team
   `;
 
-  // Try SendGrid first, then fallback to SMTP
   try {
-    console.log(`Attempting to send verification email to ${email} via SendGrid...`);
-    const result = await sendEmailWithSendGrid(email, 'Verify Your PayPals Account', htmlContent, textContent);
-    logger.info(`Verification email sent via SendGrid to ${email}`);
-    return result;
-  } catch (sendGridError) {
-    console.log(`SendGrid failed: ${sendGridError.message}, trying SMTP...`);
+    const transporter = createTransporter();
     
-    // Fallback to SMTP with faster timeout
-    try {
-      const transporter = createTransporter();
-      
-      // Quick connection test with reduced timeout
-      console.log('Testing SMTP connection...');
-      const connectionTest = await Promise.race([
-        transporter.verify(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection test timeout')), 5000) // Reduced to 5 seconds
-        )
-      ]);
-      
-      if (!connectionTest) {
-        throw new Error('SMTP connection verification failed');
-      }
-      console.log('SMTP connection verified successfully');
-      
-      const mailOptions = {
-        from: {
-          name: 'PayPals Team',
-          address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
-        },
-        to: email,
-        subject: 'Verify Your PayPals Account',
-        html: htmlContent,
-        text: textContent
-      };
-
-      // Send email with timeout
-      console.log(`Sending verification email to ${email} via SMTP...`);
-      const info = await Promise.race([
-        transporter.sendMail(mailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email send timeout')), 15000) // Reduced to 15 seconds
-        )
-      ]);
-      
-      logger.info(`Verification email sent via SMTP to ${email}: ${info.messageId}`);
-      return info;
-    } catch (smtpError) {
-      // Both methods failed
-      const combinedError = new Error(`Both SendGrid and SMTP failed. SendGrid: ${sendGridError.message}, SMTP: ${smtpError.message}`);
-      throw combinedError;
+    // Quick connection test with reduced timeout
+    console.log('Testing SMTP connection...');
+    const connectionTest = await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection test timeout')), 8000) // 8 seconds
+      )
+    ]);
+    
+    if (!connectionTest) {
+      throw new Error('SMTP connection verification failed');
     }
+    console.log('SMTP connection verified successfully');
+    
+    const mailOptions = {
+      from: {
+        name: 'PayPals Team',
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
+      },
+      to: email,
+      subject: 'Verify Your PayPals Account',
+      html: htmlContent,
+      text: textContent
+    };
+
+    // Send email with timeout
+    console.log(`Sending verification email to ${email} via SMTP...`);
+    const info = await Promise.race([
+      transporter.sendMail(mailOptions),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email send timeout')), 15000) // 15 seconds
+      )
+    ]);
+    
+    logger.info(`Verification email sent via SMTP to ${email}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    logger.error(`Failed to send verification email to ${email}: ${error.message}`);
+    throw error;
   }
 };
 
@@ -195,27 +186,27 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
   try {
     const transporter = createTransporter();
     
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/reset-password/${resetToken}`;
     
     const mailOptions = {
       from: {
         name: 'PayPals Team',
-        address: process.env.SMTP_USER
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
       },
       to: email,
       subject: 'Reset Your PayPals Password',
       html: `
         <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
           <div style="background-color: #DC2626; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">Password Reset Request</h1>
+            <h1 style="color: white; margin: 0;">PayPals Password Reset</h1>
           </div>
           
           <div style="padding: 30px; background-color: #f9fafb;">
-            <h2 style="color: #374151;">Hi ${username},</h2>
+            <h2 style="color: #374151;">Hi ${username}! 🔒</h2>
             
             <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              We received a request to reset your PayPals password. If you made this request, 
-              click the button below to reset your password:
+              We received a request to reset your PayPals account password. 
+              Click the button below to create a new password.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -238,23 +229,22 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
             <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 30px 0;">
             
             <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
-              This reset link will expire in 1 hour.<br>
-              If you didn't request a password reset, you can safely ignore this email.
+              This password reset link will expire in 1 hour.<br>
+              If you didn't request this, you can safely ignore this email.
             </p>
           </div>
         </div>
       `,
       text: `
-        Password Reset Request
+        Hi ${username}!
         
-        Hi ${username},
-        
-        We received a request to reset your PayPals password.
-        Please click the link below to reset your password:
+        We received a request to reset your PayPals account password.
+        Click the link below to create a new password:
         ${resetUrl}
         
         This link will expire in 1 hour.
-        If you didn't request this reset, you can safely ignore this email.
+        
+        If you didn't request this, you can safely ignore this email.
         
         Best regards,
         The PayPals Team
@@ -264,36 +254,69 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
     const info = await transporter.sendMail(mailOptions);
     logger.info(`Password reset email sent to ${email}: ${info.messageId}`);
     return info;
-    
   } catch (error) {
     logger.error(`Failed to send password reset email to ${email}: ${error.message}`);
     throw error;
   }
 };
 
-const sendCircleInvitationEmail = async (email, inviterUsername, circleName) => {
+// Additional email functions for other features...
+const sendCircleInvitationEmail = async (email, circleId, circleName, inviterName, invitationToken) => {
   try {
     const transporter = createTransporter();
-
+    
+    const invitationUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/join-circle/${invitationToken}`;
+    
     const mailOptions = {
       from: {
         name: 'PayPals Team',
-        address: process.env.SMTP_USER
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
       },
       to: email,
-      subject: `You're invited to join ${circleName} on PayPals` ,
+      subject: `You're invited to join "${circleName}" on PayPals!`,
       html: `
         <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
           <div style="background-color: #059669; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">You're invited!</h1>
+            <h1 style="color: white; margin: 0;">Circle Invitation</h1>
           </div>
+          
           <div style="padding: 30px; background-color: #f9fafb;">
-            <p style="color: #374151;">${inviterUsername} invited you to join the circle <strong>${circleName}</strong> on PayPals.</p>
-            <p style="color: #6B7280;">Create an account or log in to accept the invitation.</p>
+            <h2 style="color: #374151;">You're invited! 🎉</h2>
+            
+            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
+              ${inviterName} has invited you to join the "${circleName}" circle on PayPals.
+              Join now to start splitting bills and expenses together!
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${invitationUrl}" 
+                 style="background-color: #059669; color: white; padding: 12px 30px; 
+                        text-decoration: none; border-radius: 8px; font-weight: bold; 
+                        display: inline-block;">
+                Join Circle
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px;">
+              If the button doesn't work, copy and paste this link into your browser:
+              <br>
+              <a href="${invitationUrl}" style="color: #059669; word-break: break-all;">
+                ${invitationUrl}
+              </a>
+            </p>
           </div>
         </div>
       `,
-      text: `${inviterUsername} invited you to join the circle ${circleName} on PayPals. Create an account or log in to accept the invitation.`
+      text: `
+        You're invited to join "${circleName}" on PayPals!
+        
+        ${inviterName} has invited you to join their circle.
+        Click the link below to join:
+        ${invitationUrl}
+        
+        Best regards,
+        The PayPals Team
+      `
     };
 
     const info = await transporter.sendMail(mailOptions);
@@ -303,344 +326,137 @@ const sendCircleInvitationEmail = async (email, inviterUsername, circleName) => 
     logger.error(`Failed to send circle invitation email to ${email}: ${error.message}`);
     throw error;
   }
-}
+};
 
-const sendExternalTransactionInvite = async (externalEmail, externalName, transactionData, accessToken) => {
+const sendExternalTransactionInvite = async (email, transactionDetails, inviterName, invitationToken) => {
   try {
     const transporter = createTransporter();
     
-    const transactionUrl = `${process.env.FRONTEND_URL}/external/transaction/${accessToken}`;
+    const joinUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/join-transaction/${invitationToken}`;
     
     const mailOptions = {
       from: {
         name: 'PayPals Team',
-        address: process.env.SMTP_USER
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
       },
-      to: externalEmail,
-      subject: `You've been included in a transaction: ${transactionData.name}`,
+      to: email,
+      subject: `You're invited to split "${transactionDetails.description}" on PayPals`,
       html: `
         <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-          <div style="background-color: #059669; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">PayPals Transaction</h1>
+          <div style="background-color: #7C3AED; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Transaction Invite</h1>
           </div>
           
           <div style="padding: 30px; background-color: #f9fafb;">
-            <h2 style="color: #374151;">Hi ${externalName}! 💰</h2>
+            <h2 style="color: #374151;">Split the Bill! 💰</h2>
             
             <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              You've been included in a transaction by ${transactionData.creatorName} in the ${transactionData.circleName} circle.
+              ${inviterName} wants to split "${transactionDetails.description}" with you.
+              Total amount: $${transactionDetails.amount}
             </p>
-            
-            <div style="background-color: white; padding: 25px; border-radius: 12px; margin: 25px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-              <h3 style="margin-top: 0; color: #374151; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px;">📋 Transaction Details</h3>
-              
-              <div style="margin: 15px 0;">
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Transaction:</strong></span> 
-                  <span style="color: #374151;">${transactionData.name}</span>
-                </p>
-                ${transactionData.description ? `
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Description:</strong></span> 
-                  <span style="color: #374151;">${transactionData.description}</span>
-                </p>` : ''}
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Category:</strong></span> 
-                  <span style="color: #374151;">${transactionData.category || 'General'}</span>
-                </p>
-                ${transactionData.locationName ? `
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Location:</strong></span> 
-                  <span style="color: #374151;">${transactionData.locationName}</span>
-                </p>` : ''}
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Created by:</strong></span> 
-                  <span style="color: #374151;">${transactionData.creatorName}</span>
-                </p>
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Circle:</strong></span> 
-                  <span style="color: #374151;">${transactionData.circleName}</span>
-                </p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Your Amount:</strong></span> 
-                  <span style="color: #059669; font-size: 18px; font-weight: bold;">$${transactionData.userAmount}</span>
-                </p>
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Total Amount:</strong></span> 
-                  <span style="color: #374151;">$${transactionData.totalAmount}</span>
-                </p>
-              </div>
-            </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${transactionUrl}" 
-                 style="background-color: #1E40AF; color: white; padding: 18px 35px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px; box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);">
-                💳 Pay Now 
+              <a href="${joinUrl}" 
+                 style="background-color: #7C3AED; color: white; padding: 12px 30px; 
+                        text-decoration: none; border-radius: 8px; font-weight: bold; 
+                        display: inline-block;">
+                View & Pay
               </a>
-              <p style="color: #6B7280; font-size: 12px; margin-top: 10px;">
-                Secure payment via NetsQR QR code
-              </p>
             </div>
-            
-            <div style="background-color: #F3F4F6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #374151; font-size: 14px; text-align: center;">
-                <strong>💡 How it works:</strong><br>
-                Click "Pay Now" → Scan NetsQR QR code → Complete payment → You're done!
-              </p>
-            </div>
-            
-            <div style="background-color: #FEF3C7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #92400E; font-size: 14px;">
-                <strong>Note:</strong> This link is valid for 30 days. You don't need to create an account to view or update this transaction.
-              </p>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
-              If you have any questions about this transaction, please contact ${transactionData.creatorName} directly.
-            </p>
-          </div>
-          
-          <div style="background-color: #374151; padding: 20px; text-align: center;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              This is an automated message from PayPals. Do not reply to this email.
-            </p>
           </div>
         </div>
       `,
       text: `
-        You've been included in a transaction: ${transactionData.name}
-
-        Transaction Details:
-        - Description: ${transactionData.name}
-        ${transactionData.description ? `- Details: ${transactionData.description}` : ''}
-        - Category: ${transactionData.category || 'General'}
-        ${transactionData.locationName ? `- Location: ${transactionData.locationName}` : ''}
-        - Your amount: $${transactionData.userAmount}
-        - Total amount: $${transactionData.totalAmount}
-        - Created by: ${transactionData.creatorName}
-        - Circle: ${transactionData.circleName}
-
-        Pay securely with NetsQR QR code: ${transactionUrl}
-
-        Click the link above to view transaction details and pay instantly with NetSqr QR code.
-        This link is valid for 30 days and you don't need to create an account.
+        ${inviterName} wants to split "${transactionDetails.description}" with you.
+        Total amount: $${transactionDetails.amount}
+        
+        Click the link to view and pay your share:
+        ${joinUrl}
+        
+        Best regards,
+        The PayPals Team
       `
     };
 
     const info = await transporter.sendMail(mailOptions);
-    logger.info(`External transaction invite sent to ${externalEmail}: ${info.messageId}`);
+    logger.info(`Transaction invitation email sent to ${email}: ${info.messageId}`);
     return info;
   } catch (error) {
-    logger.error(`Failed to send external transaction invite to ${externalEmail}: ${error.message}`);
+    logger.error(`Failed to send transaction invitation email to ${email}: ${error.message}`);
     throw error;
   }
 };
 
-const sendTransactionPaymentReminder = async (userEmail, userName, transactionData) => {
+const sendTransactionPaymentReminder = async (email, transactionDetails, username) => {
   try {
     const transporter = createTransporter();
     
-    const paymentUrl = `${process.env.FRONTEND_URL}/transaction/${transactionData.id}/pay`;
+    const paymentUrl = `${process.env.FRONTEND_URL || 'https://paypals-frontend.onrender.com'}/transactions/${transactionDetails.id}`;
     
     const mailOptions = {
       from: {
         name: 'PayPals Team',
-        address: process.env.SMTP_USER
+        address: process.env.EMAIL_USER || process.env.SMTP_USER || 'k4rysgoh@gmail.com'
       },
-      to: userEmail,
-      subject: `Payment Due: ${transactionData.name}`,
-      html: `
-        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-          <div style="background-color: #059669; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">PayPals Payment Reminder</h1>
-          </div>
-          
-          <div style="padding: 30px; background-color: #f9fafb;">
-            <h2 style="color: #374151;">Hi ${userName}! 💰</h2>
-            
-            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              You have a pending payment for a transaction in the ${transactionData.circleName} circle.
-            </p>
-            
-            <div style="background-color: white; padding: 25px; border-radius: 12px; margin: 25px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-              <h3 style="margin-top: 0; color: #374151; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px;">📋 Transaction Details</h3>
-              
-              <div style="margin: 15px 0;">
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Transaction:</strong></span> 
-                  <span style="color: #374151;">${transactionData.name}</span>
-                </p>
-                ${transactionData.description ? `
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Description:</strong></span> 
-                  <span style="color: #374151;">${transactionData.description}</span>
-                </p>` : ''}
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Category:</strong></span> 
-                  <span style="color: #374151;">${transactionData.category || 'General'}</span>
-                </p>
-                ${transactionData.locationName ? `
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Location:</strong></span> 
-                  <span style="color: #374151;">${transactionData.locationName}</span>
-                </p>` : ''}
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Created by:</strong></span> 
-                  <span style="color: #374151;">${transactionData.creatorName}</span>
-                </p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Your Amount:</strong></span> 
-                  <span style="color: #059669; font-size: 18px; font-weight: bold;">$${transactionData.userAmount}</span>
-                </p>
-                <p style="margin: 8px 0; display: flex; justify-content: space-between;">
-                  <span style="color: #6B7280;"><strong>Total Amount:</strong></span> 
-                  <span style="color: #374151;">$${transactionData.totalAmount}</span>
-                </p>
-              </div>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${paymentUrl}" 
-                 style="background-color: #1E40AF; color: white; padding: 18px 35px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px; box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);">
-                💳 Pay Now with NetSqr
-              </a>
-              <p style="color: #6B7280; font-size: 12px; margin-top: 10px;">
-                Secure payment via NetSqr QR code
-              </p>
-            </div>
-            
-            <div style="background-color: #F3F4F6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #374151; font-size: 14px; text-align: center;">
-                <strong>💡 How it works:</strong><br>
-                Click "Pay Now" → Scan NetSqr QR code → Complete payment → You're done!
-              </p>
-            </div>
-            
-            <div style="background-color: #EEF2FF; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #3730A3; font-size: 14px;">
-                <strong>Signed in user:</strong> This link will take you directly to the payment page after logging in to your PayPals account.
-              </p>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
-              If you have any questions about this transaction, please contact ${transactionData.creatorName} directly.
-            </p>
-          </div>
-          
-          <div style="background-color: #374151; padding: 20px; text-align: center;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              This is an automated message from PayPals. Do not reply to this email.
-            </p>
-          </div>
-        </div>
-      `,
-      text: `
-Payment Reminder: ${transactionData.name}
-
-Hi ${userName},
-
-You have a pending payment for a transaction in the ${transactionData.circleName} circle.
-
-Transaction Details:
-- Description: ${transactionData.name}
-${transactionData.description ? `- Details: ${transactionData.description}` : ''}
-- Category: ${transactionData.category || 'General'}
-${transactionData.locationName ? `- Location: ${transactionData.locationName}` : ''}
-- Your amount: $${transactionData.userAmount}
-- Total amount: $${transactionData.totalAmount}
-- Created by: ${transactionData.creatorName}
-- Circle: ${transactionData.circleName}
-
-Pay securely with NetSqr QR code: ${paymentUrl}
-
-Click the link above to log in to your PayPals account and complete payment with NetSqr QR code.
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    logger.info(`Transaction payment reminder sent to ${userEmail}: ${info.messageId}`);
-    return info;
-  } catch (error) {
-    logger.error(`Failed to send transaction payment reminder to ${userEmail}: ${error.message}`);
-    throw error;
-  }
-};
-
-const sendPaymentReminderEmail = async (userEmail, reminderData) => {
-  try {
-    const transporter = createTransporter();
-    
-    const paymentUrl = `${process.env.FRONTEND_URL}/transaction/${reminderData.transactionId}/pay`;
-    
-    const mailOptions = {
-      from: {
-        name: 'PayPals Payment Reminder',
-        address: process.env.SMTP_USER
-      },
-      to: userEmail,
-      subject: `💰 Payment Reminder: ${reminderData.transactionName}`,
+      to: email,
+      subject: `Payment Reminder: ${transactionDetails.description}`,
       html: `
         <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
           <div style="background-color: #F59E0B; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">💰 Payment Reminder</h1>
+            <h1 style="color: white; margin: 0;">Payment Reminder</h1>
           </div>
           
           <div style="padding: 30px; background-color: #f9fafb;">
-            <h2 style="color: #374151;">Hi ${reminderData.recipientName}! 👋</h2>
+            <h2 style="color: #374151;">Hi ${username}! ⏰</h2>
             
             <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              This is a friendly reminder about your pending payment for:
+              This is a friendly reminder that you have a pending payment for:
+              "${transactionDetails.description}"
             </p>
             
-            <div style="background-color: white; border-left: 4px solid #F59E0B; padding: 20px; margin: 20px 0;">
-              <h3 style="margin: 0 0 10px 0; color: #1F2937;">${reminderData.transactionName}</h3>
-              <p style="margin: 5px 0; color: #6B7280;">
-                <strong>Amount:</strong> $${reminderData.amount.toFixed(2)}
-              </p>
-              <p style="margin: 5px 0; color: #6B7280;">
-                <strong>Circle:</strong> ${reminderData.circleName}
-              </p>
-              <p style="margin: 5px 0; color: #6B7280;">
-                <strong>Created by:</strong> ${reminderData.creatorName}
-              </p>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 16px; line-height: 1.6;">
-              Please settle up when you get a chance. You can pay directly through PayPals or update your payment status manually.
+            <p style="color: #6B7280; font-size: 16px;">
+              <strong>Amount due: $${transactionDetails.amount}</strong>
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${paymentUrl}" 
-                 style="background-color: #F59E0B; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                 style="background-color: #F59E0B; color: white; padding: 12px 30px; 
+                        text-decoration: none; border-radius: 8px; font-weight: bold; 
+                        display: inline-block;">
                 Pay Now
               </a>
             </div>
-            
-            <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
-              <p style="color: #9CA3AF; font-size: 14px; text-align: center;">
-                This is an automated reminder from PayPals. If you've already paid, you can ignore this email or update your payment status in the app.
-              </p>
-            </div>
-          </div>
-          
-          <div style="background-color: #374151; padding: 20px; text-align: center;">
-            <p style="color: #9CA3AF; margin: 0; font-size: 14px;">
-              PayPals - Group expense management made simple
-            </p>
           </div>
         </div>
+      `,
+      text: `
+        Hi ${username}!
+        
+        This is a friendly reminder that you have a pending payment for:
+        "${transactionDetails.description}"
+        
+        Amount due: $${transactionDetails.amount}
+        
+        Click the link to pay:
+        ${paymentUrl}
+        
+        Best regards,
+        The PayPals Team
       `
     };
 
     const info = await transporter.sendMail(mailOptions);
-    logger.info(`Payment reminder email sent to ${userEmail}: ${info.messageId}`);
+    logger.info(`Payment reminder email sent to ${email}: ${info.messageId}`);
     return info;
   } catch (error) {
-    logger.error(`Failed to send payment reminder email to ${userEmail}: ${error.message}`);
+    logger.error(`Failed to send payment reminder email to ${email}: ${error.message}`);
     throw error;
   }
+};
+
+const sendPaymentReminderEmail = async (email, transactionDetails, username) => {
+  // This is an alias for sendTransactionPaymentReminder for backward compatibility
+  return sendTransactionPaymentReminder(email, transactionDetails, username);
 };
 
 module.exports = {
