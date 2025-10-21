@@ -67,34 +67,57 @@ module.exports = {
 
       // Send verification email (non-blocking with improved error handling)
       let emailResult = null;
-      try {
-        emailResult = await sendVerificationEmail(email, verificationToken, username);
-        
-        // Handle development mode
-        if (emailResult.mode === 'development') {
-          logger.info(`Development mode: Email verification skipped for ${email}`);
-          emailResult = { 
-            success: true, 
-            mode: 'development',
-            note: 'Development mode: Email verification was skipped. Account is ready to use.'
-          };
-        } else {
-          logger.info(`Verification email sent to ${email}`);
-          emailResult = { success: true };
-        }
-      } catch (emailError) {
-        logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
-        console.log(`Email sending failed for ${email}, but registration will continue`);
+      
+      // TEMPORARY FIX: Skip email sending to prevent hanging
+      // TODO: Remove this when email service is stable
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`📧 PRODUCTION MODE: Skipping email verification for ${email} (temporary fix)`);
+        logger.info(`Production mode: Email verification temporarily skipped for ${email}`);
         emailResult = { 
-          success: false, 
-          error: emailError.message,
-          note: 'Registration completed but verification email could not be sent. You can request a new verification email later.'
+          success: true, 
+          mode: 'production-skip',
+          note: 'Email verification temporarily disabled. Registration completed successfully.'
         };
+      } else {
+        try {
+          emailResult = await Promise.race([
+            sendVerificationEmail(email, verificationToken, username),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Email service timeout')), 10000) // 10 second timeout
+            )
+          ]);
+          
+          // Handle development mode
+          if (emailResult.mode === 'development') {
+            logger.info(`Development mode: Email verification skipped for ${email}`);
+            emailResult = { 
+              success: true, 
+              mode: 'development',
+              note: 'Development mode: Email verification was skipped. Account is ready to use.'
+            };
+          } else {
+            logger.info(`Verification email sent to ${email}`);
+            emailResult = { success: true };
+          }
+        } catch (emailError) {
+          logger.error(`Failed to send verification email to ${email}: ${emailError.message}`);
+          console.log(`Email sending failed for ${email}, but registration will continue`);
+          emailResult = { 
+            success: false, 
+            error: emailError.message,
+            note: 'Registration completed but verification email could not be sent. You can request a new verification email later.'
+          };
+        }
       }
 
-      // Send welcome notification
+      // Send welcome notification (with timeout)
       try {
-        await NotificationService.sendWelcomeNotification(results.id, username);
+        await Promise.race([
+          NotificationService.sendWelcomeNotification(results.id, username),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Notification service timeout')), 5000) // 5 second timeout
+          )
+        ]);
       } catch (notificationError) {
         logger.error(`Failed to send welcome notification to user ${results.id}: ${notificationError.message}`);
         // Don't fail registration if notification fails
