@@ -123,18 +123,42 @@ const RegisterPage = () => {
         email: formData.email,
       });
       console.log('Registration successful, response:', response);
-      showNotification(response.message || "Registration successful! Redirecting to verification page...", 'success');
+      
+      // Store email for verification page
       sessionStorage.setItem("registrationEmail", formData.email);
+      
+      // Show success message briefly, then redirect
+      showNotification(response.message || "Registration successful! Redirecting...", 'success');
       
       // Immediate redirect to verification page after successful registration
       console.log('Navigating to verify-email page...');
+      
+      // Try multiple redirect methods for reliability
+      console.log('Current location before redirect:', window.location.href);
+      console.log('Navigate function available:', typeof navigate);
+      
+      // Method 1: Try React Router navigate immediately
       try {
-        navigate('/verify-email');
+        console.log('Attempting React Router navigate...');
+        navigate('/verify-email', { replace: true });
+        console.log('React Router navigate called successfully');
       } catch (navError) {
-        console.error('Navigation failed, trying alternative method:', navError);
-        // Fallback: use window.location
-        window.location.href = '/verify-email';
+        console.error('React Router navigation failed:', navError);
+        
+        // Method 2: Use window.location as fallback
+        console.log('Falling back to window.location...');
+        setTimeout(() => {
+          window.location.href = '/verify-email';
+        }, 100);
       }
+      
+      // Method 3: Additional safety fallback after a short delay
+      setTimeout(() => {
+        if (window.location.pathname !== '/verify-email') {
+          console.log('Redirect did not work, forcing with window.location.replace...');
+          window.location.replace('/verify-email');
+        }
+      }, 1000);
     } catch (error) {
       console.error("Register failed:", error);
       
