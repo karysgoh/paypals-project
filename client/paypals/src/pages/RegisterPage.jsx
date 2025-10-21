@@ -133,32 +133,18 @@ const RegisterPage = () => {
       // Immediate redirect to verification page after successful registration
       console.log('Navigating to verify-email page...');
       
-      // Try multiple redirect methods for reliability
+      // FORCE HARD REDIRECT - bypass React Router entirely
       console.log('Current location before redirect:', window.location.href);
       console.log('Navigate function available:', typeof navigate);
       
-      // Method 1: Try React Router navigate immediately
-      try {
-        console.log('Attempting React Router navigate...');
-        navigate('/verify-email', { replace: true });
-        console.log('React Router navigate called successfully');
-      } catch (navError) {
-        console.error('React Router navigation failed:', navError);
-        
-        // Method 2: Use window.location as fallback
-        console.log('Falling back to window.location...');
-        setTimeout(() => {
-          window.location.href = '/verify-email';
-        }, 100);
-      }
+      // Skip React Router and go straight to window.location
+      console.log('🚀 FORCING HARD REDIRECT to /verify-email...');
       
-      // Method 3: Additional safety fallback after a short delay
+      // Use a very short delay to allow the success notification to show
       setTimeout(() => {
-        if (window.location.pathname !== '/verify-email') {
-          console.log('Redirect did not work, forcing with window.location.replace...');
-          window.location.replace('/verify-email');
-        }
-      }, 1000);
+        console.log('Executing window.location.href = "/verify-email"');
+        window.location.href = '/verify-email';
+      }, 500); // 500ms delay to see the success message
     } catch (error) {
       console.error("Register failed:", error);
       

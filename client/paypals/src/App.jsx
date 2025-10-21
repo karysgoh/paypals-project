@@ -44,9 +44,21 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public routes - no layout wrapper needed */}
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/verify-email/:token" element={<VerifyEmail />} />
+          {/* Debug route - simple test */}
+          <Route path="/verify-email" element={
+            <div style={{padding: '20px', textAlign: 'center'}}>
+              <h1>Email Verification Page</h1>
+              <p>This is the verify-email route working!</p>
+              <p>Email: {sessionStorage.getItem('registrationEmail')}</p>
+            </div>
+          } />
+          <Route path="/verify-email/:token" element={
+            <div style={{padding: '20px', textAlign: 'center'}}>
+              <h1>Email Verification with Token</h1>
+              <p>This is the verify-email/:token route working!</p>
+              <p>Email: {sessionStorage.getItem('registrationEmail')}</p>
+            </div>
+          } />
           
           {/* Routes with MainLayout */}
           <Route element={<MainLayout />}>
