@@ -44,13 +44,16 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Public routes - no layout wrapper needed */}
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/verify-email/:token" element={<VerifyEmail />} />
+          
+          {/* Routes with MainLayout */}
           <Route element={<MainLayout />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/tutorial" element={<></>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/external/transaction/:token" element={<ExternalTransaction />} />
             <Route path="/external/pay/:token" element={<ExternalTransaction />} />
             <Route element={<ProtectedRoute />}>
@@ -63,6 +66,16 @@ function App() {
               <Route path="/settings/payment" element={<PaymentSettings />} />
             </Route>
           </Route>
+          
+          {/* Catch-all route for debugging */}
+          <Route path="*" element={
+            <div style={{padding: '20px'}}>
+              <h2>Route Not Found</h2>
+              <p>Current path: {window.location.pathname}</p>
+              <p>Available routes include: /, /login, /register, /verify-email, /dashboard</p>
+              <a href="/" style={{color: 'blue', textDecoration: 'underline'}}>Go to Home</a>
+            </div>
+          } />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
