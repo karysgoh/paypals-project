@@ -130,6 +130,9 @@ const RegisterPage = () => {
       // Show success message briefly, then redirect
       showNotification(response.message || "Registration successful! Redirecting...", 'success');
       
+      // Add visible alert for debugging
+      alert('Registration successful! About to redirect to verification page. Check console for details.');
+      
       // Immediate redirect to verification page after successful registration
       console.log('Navigating to verify-email page...');
       
@@ -140,11 +143,21 @@ const RegisterPage = () => {
       // Skip React Router and go straight to window.location
       console.log('🚀 FORCING HARD REDIRECT to /verify-email...');
       
-      // Use a very short delay to allow the success notification to show
+      // Set loading state to false before redirect to prevent interference
+      setIsRegistering(false);
+      
+      // IMMEDIATE hard redirect
+      console.log('Executing IMMEDIATE window.location.href = "/verify-email"');
+      window.location.href = '/verify-email';
+      
+      // Backup redirect in case the first one doesn't work
       setTimeout(() => {
-        console.log('Executing window.location.href = "/verify-email"');
-        window.location.href = '/verify-email';
-      }, 500); // 500ms delay to see the success message
+        console.log('Backup redirect executing...');
+        if (window.location.pathname !== '/verify-email') {
+          console.log('First redirect failed, trying window.location.replace...');
+          window.location.replace('/verify-email');
+        }
+      }, 100);
     } catch (error) {
       console.error("Register failed:", error);
       
@@ -158,7 +171,9 @@ const RegisterPage = () => {
         showNotification("Registration failed. Please try again.", 'error');
       }
     } finally {
-      setIsRegistering(false);
+      console.log('📝 Finally block executing - this should come AFTER redirect attempts');
+      // Don't set isRegistering to false here as it might interfere with redirect
+      // setIsRegistering(false); // Moved to before redirect
     }
   };
 
